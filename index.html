@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>click-to-get-coord</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header id="toolbar">
+  <input type="file" id="file-input" accept="video/*,image/*" multiple hidden>
+  <button id="btn-open">ファイルを開く</button>
+
+  <span class="sep"></span>
+
+  <button id="btn-prev" class="nav" disabled>◀</button>
+  <span id="frame-label">- / -</span>
+  <button id="btn-next" class="nav" disabled>▶</button>
+
+  <span class="sep"></span>
+
+  <button id="btn-calib" class="mode" data-mode="calib" disabled>Calibration (c)</button>
+  <button id="btn-add"   class="mode" data-mode="add"   disabled>Add (a)</button>
+  <button id="btn-del"   class="mode" data-mode="del"   disabled>Delete (d)</button>
+
+  <span class="sep"></span>
+
+  <button id="btn-save" disabled>保存</button>
+</header>
+
+<main id="stage">
+  <canvas id="canvas"></canvas>
+  <p id="placeholder">動画または画像ファイルを開いてください</p>
+</main>
+
+<footer id="status">ready</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
