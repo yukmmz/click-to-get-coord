@@ -26,7 +26,7 @@ TypeScript を採用しなかった理由: `dist/` へのビルドが必須に�
   狙うと丸めでどちらのフレームが出るか不定になるため、区間の中央を狙う。
 - **時刻の記録**: 表示されたフレームの `mediaTime` を実測して `frame_times` / `time_sec` に保存する。
   フレーム番号は「先頭を 0 とする通し番号」であり、コンテナ内部のフレーム番号と厳密に
-  一致する保証はない。**出力では時刻の方が信頼できる**旨を README.txt に明記している。
+  一致する保証はない。**出力では時刻の方が信頼できる**旨を出力側の README.md に明記している。
 - `requestVideoFrameCallback` 非対応ブラウザ（Firefox）では 30 fps を仮定し、警告を出す。
 
 WebCodecs（`VideoDecoder` + mp4box.js）による厳密なフレーム単位デコードは、CDN 依存が増え
@@ -50,7 +50,10 @@ WebCodecs（`VideoDecoder` + mp4box.js）による厳密なフレーム単位デ
 
 `.mat`（MATLAB Level 5, 無圧縮）を自前のエンコーダ（`matwriter.js`）で書き出す。
 `coords_raw` / `coords_real` は移植元と同じ 1×N cell 配列（各セルは n_i×2 double）なので、
-既存の解析コードがそのまま使える。加えて CSV・PNG・session.json・README.txt を出力する。
+既存の解析コードがそのまま使える。加えて CSV・PNG・session.json・README.md（Markdown）を出力する。
+フレームごとの PNG は**画像入力では既定でオン、動画では既定でオフ**（動画は対象フレームが
+大量になりうるため）。設定で切り替えられ、出力側の README.md はどれが実際に書き出されたかを
+反映して記述を変える。
 
 実装上の落とし穴（再発防止のため記録）:
 

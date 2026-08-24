@@ -31,7 +31,6 @@
   <div class="group">
     <label for="marker-size" title="点の直径（画面上のピクセル）。[ で細く、] で太く">点の直径</label>
     <input type="number" id="marker-size" min="1" max="40" step="1" title="[ で細く、] で太く">
-    <span class="hint">[ ]</span>
   </div>
 
   <div class="group right">
@@ -51,6 +50,9 @@
   <button id="btn-prev" disabled title="← / z">◀</button>
   <span id="frame-label">- / -</span>
   <button id="btn-next" disabled title="→ / x">▶</button>
+  <label for="frame-step" class="label" title="◀ ▶ 1回で進むフレーム数。, で減らし . で増やす">送り幅</label>
+  <input type="number" id="frame-step" min="1" max="10000" step="1" value="1" disabled
+    title=", で減らし . で増やす">
   <button id="btn-jump" disabled title="j">ジャンプ (j)</button>
   <span id="frame-time" class="hint"></span>
 
@@ -66,6 +68,11 @@
   <span class="spacer"></span>
   <span id="point-count" class="hint"></span>
 </nav>
+
+<div id="seek-row" hidden>
+  <input type="range" id="seek" min="0" max="0" value="0" step="1"
+    title="ドラッグまたはクリックで任意のフレームへ移動">
+</div>
 
 <main id="stage">
   <canvas id="canvas"></canvas>
@@ -129,6 +136,8 @@
     <label>点の直径（px） <input type="number" id="set-diameter" min="1" max="40" step="1"></label>
     <label>クリック点の色 <input type="color" id="set-point-color"></label>
     <label>キャリブレーション点の色 <input type="color" id="set-calib-color"></label>
+    <label><input type="checkbox" id="set-frame-pngs"> フレームごとの PNG（plot / overlay）を書き出す
+      — 画像は既定でオン、動画は枚数が膨らむため既定でオフ</label>
     <label><input type="checkbox" id="set-index-auto"> 点の番号を点と同じ色にする</label>
     <label>点の番号の色（上のチェックを外したとき） <input type="color" id="set-index-color"></label>
     <label><input type="checkbox" id="set-marker-edge"> 点に白い縁取りをつける（太さは点の大きさに連動）</label>
@@ -152,6 +161,14 @@
     <li>消したい点があれば <b>Delete モード</b>（d）でその点の近くをクリックする。</li>
     <li><b>保存</b>（Ctrl+S）で出力先フォルダを選ぶと、そのフォルダに全ファイルが書き出される。</li>
   </ol>
+
+  <h3>フレームの移動（動画・複数画像）</h3>
+  <ul>
+    <li>画面上部の<b>シークバー</b>をドラッグ、またはクリックで任意のフレームへ飛べます。</li>
+    <li><b>◀ ▶</b>（← → / z x）は<b>送り幅</b>のフレーム数だけ進みます。既定は1フレームで、
+      ツールバーの数値欄か <b>, </b>／<b>.</b> キーで 1, 2, 5, 10, 20, 50, 100, 200, 500 と切り替わります。</li>
+    <li><b>j</b> でフレーム番号を直接指定できます。</li>
+  </ul>
 
   <h3>キャリブレーションのやり直し</h3>
   <p>点を打っている途中でも <b>c</b> キー（または Calibration ボタン）でやり直せます。</p>
@@ -182,6 +199,7 @@
     <tr><td>→ または x</td><td>次のフレーム</td></tr>
     <tr><td>← または z</td><td>前のフレーム</td></tr>
     <tr><td>j</td><td>フレーム番号を指定して移動</td></tr>
+    <tr><td>, / .</td><td>送り幅（◀ ▶ 1回で進むフレーム数）を減らす / 増やす</td></tr>
     <tr><td>[ / ]</td><td>点の直径を小さく / 大きく</td></tr>
     <tr><td>e</td><td>設定</td></tr>
     <tr><td>h</td><td>このヘルプ</td></tr>
@@ -204,8 +222,11 @@
     <li><code>plot_frame_XXXX.png</code> — 実世界座標系でのクリック点と、それを結ぶ曲線</li>
     <li><code>overlay_frame_XXXX.png</code> — 元画像にクリック点を重ねた検証用画像</li>
     <li><code>session.json</code> — 作業再開用の状態</li>
-    <li><code>README.txt</code> — 上記すべての読み方の説明</li>
+    <li><code>README.md</code> — 上記すべての読み方の説明（Markdown）</li>
   </ul>
+  <p class="hint">フレームごとの PNG は、<b>画像入力では既定でオン、動画では既定でオフ</b>です
+    （動画は対象フレームが大量になりうるため）。設定（e）で切り替えられます。数値データは
+    <code>coords.mat</code> / <code>coords.csv</code> に全て入っているので、図は後から作り直せます。</p>
   <form method="dialog"><menu><button type="submit" value="ok" class="primary">閉じる</button></menu></form>
 </dialog>
 

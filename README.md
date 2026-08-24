@@ -26,7 +26,12 @@ Choosing an output folder writes:
 | `plot_frame_XXXX.png` | The clicked points of that frame in calibrated coordinates, connected in click order |
 | `overlay_frame_XXXX.png` | The source frame with the clicked points drawn on it, for verification |
 | `session.json` | Full state, reloadable by the app |
-| `README.txt` | A self-contained description of every file and every column |
+| `README.md` | A self-contained description of every file and every column |
+
+The per-frame PNGs default to **on for images and off for video** — an annotated clip can
+easily mean hundreds of files and a long export. The switch is in the settings, and the
+written `README.md` says which of them are present. The numbers are all in `coords.mat` /
+`coords.csv`, so the figures can be redrawn later either way.
 
 ```python
 from scipy.io import loadmat
@@ -41,6 +46,14 @@ pts = d['coords_real'][0][0]     # frame 0, shape (n_points, 2)
    know, and type each as `x,y`. Pick two points that differ in **both** x and y.
 3. Add mode starts automatically: click to record points. `d` switches to Delete mode.
 4. **保存** (Ctrl+S) — choose an output folder.
+
+### Moving between frames
+
+A seek bar spans the whole sequence: drag it, or click anywhere on it, to jump to a frame.
+`◀` / `▶` (and `←` `→` / `z` `x`) move by the **frame step**, which starts at 1 and can be
+changed in the toolbar box or with `,` / `.` (1, 2, 5, 10, 20, 50, 100, 200, 500). `j` jumps
+to a frame number. Dragging the bar coalesces requests, so a fast drag settles on the frame
+you released on rather than decoding every frame on the way.
 
 ### Zoom and pan
 
@@ -64,6 +77,7 @@ Three-finger scroll is consumed by macOS itself and never reaches the page.
 | `→` or `x` | Next frame |
 | `←` or `z` | Previous frame |
 | `j` | Jump to a frame number |
+| `,` / `.` | Smaller / larger frame step |
 | `[` / `]` | Smaller / larger point markers |
 | `e` | Settings (colours, marker outline, smooth curve, plot aspect) |
 | `h` | Help |

@@ -49,6 +49,11 @@ const PRELUDE = `
   const wheel = (init) => els.stage.dispatchEvent(new WheelEvent('wheel',
     Object.assign({ bubbles: true, cancelable: true }, init)));
   const key = (k) => document.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true }));
+  const dragSeek = async (index) => {
+    els.seek.value = String(index);
+    els.seek.dispatchEvent(new Event('input', { bubbles: true }));
+    return waitFor(() => state.frameIndex === index, 5000);
+  };
   const waitFor = async (fn, ms = 2000) => {
     const t0 = performance.now();
     while (performance.now() - t0 < ms) {
@@ -113,6 +118,7 @@ ${PRELUDE}
     state.currentFrame.width + 'x' + state.currentFrame.height);
   check('view starts fitted to the frame', Math.abs(state.view.scale - fitScale()) < 1e-9, state.view.scale);
   check('default marker diameter is 4', state.settings.diameter === 4, state.settings.diameter);
+  check('seek bar is shown for the 2-image sequence', !els.seekRow.hidden && els.seek.max === '1', els.seek.max);
   check('starts in calibration mode', state.mode === 'calib', state.mode);
   check('fps control hidden for images', els.fpsGroup.hidden && els.fpsGroup.getBoundingClientRect().width === 0);
   check('guide bar shows the calibration step', els.guideStep.textContent === 'STEP 2' && els.guideText.textContent.includes('1点目'),
@@ -281,6 +287,8 @@ ${PRELUDE}
     Math.abs(Number(cols[6]) - 6) < 0.05 && Math.abs(Number(cols[7]) - 4.5) < 0.05, cols.slice(6).join(','));
   const readme = buildReadme(ds, ['coords.mat']);
   check('readme states the scale values', readme.includes('scale_x = 0.02') && readme.includes('scale_y = -0.022'));
+  check('readme is markdown', readme.startsWith('# click-to-get-coord') && readme.includes('\`\`\`python'));
+  check('frame PNGs default to on for images', state.settings.framePngs === true, state.settings.framePngs);
   check('readme has no leftover placeholder', !readme.includes('undefined') && !readme.includes('[object'));
   const session = JSON.parse(buildSessionJson(ds));
   check('session json round-trips the points', session.framesRaw[0].length === 2);
@@ -395,8 +403,42 @@ ${PRELUDE}
   check('video frame is 640x480', state.currentFrame.width === 640 && state.currentFrame.height === 480,
     state.currentFrame.width + 'x' + state.currentFrame.height);
 
+  // --- seek bar ---
+  check('seek bar is shown for a multi-frame source', !els.seekRow.hidden && !els.seek.disabled);
+  check('seek bar spans every frame', els.seek.max === String(state.source.frameCount - 1), els.seek.max);
+  const mid = Math.floor(state.source.frameCount / 2);
+  check('dragging the seek bar moves to that frame', await dragSeek(mid), state.frameIndex + ' vs ' + mid);
+  check('the seek bar follows the current frame', els.seek.value === String(state.frameIndex), els.seek.value);
+
+  // a burst of drag events must settle on the last one, not queue them all up
+  for (let i = 0; i < 12; i++) {
+    els.seek.value = String(i * 3);
+    els.seek.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  const settled = await waitFor(() => !state.busy && state.frameIndex === 33, 6000);
+  check('a fast drag settles on the last requested frame', settled, state.frameIndex);
+
+  // --- frame step ---
+  check('the frame step starts at 1', state.frameStep === 1, state.frameStep);
+  await requestSeek(0);
+  await step(1);
+  check('one press moves one frame by default', state.frameIndex === 1, state.frameIndex);
+  key('.'); key('.'); key('.');
+  check('. walks up the step ladder', state.frameStep === 10, state.frameStep);
+  check('the step box follows the shortcut', els.frameStep.value === '10', els.frameStep.value);
+  await requestSeek(0);
+  await step(1);
+  check('one press now moves ten frames', state.frameIndex === 10, state.frameIndex);
+  await requestSeek(state.source.frameCount - 3);
+  await step(1);
+  check('a big step clamps to the last frame instead of refusing',
+    state.frameIndex === state.source.frameCount - 1, state.frameIndex);
+  key(','); key(',');
+  check(', walks back down', state.frameStep === 2, state.frameStep);
+  setFrameStep(1);
+
   const idx = Math.min(5, state.source.frameCount - 1);
-  await showFrame(idx);
+  await requestSeek(idx);
   check('seeking advances the media time', state.frameTimes[idx] > 0, state.frameTimes[idx]);
   check('media time is near the nominal frame time',
     Math.abs(state.frameTimes[idx] - idx / state.source.fps) < 2 / state.source.fps,
@@ -412,6 +454,16 @@ ${PRELUDE}
   check('.mat encoded for video', encodeMatV5(buildMatVars(ds)).length > 128);
   const imgs = await renderFrameImages(idx, ds);
   check('video overlay png rendered', imgs[1].data.size > 3000, imgs[1].data.size);
+  check('frame PNGs default to off for video', state.settings.framePngs === false, state.settings.framePngs);
+  const videoReadme = buildReadme(ds, ['README.md', 'coords.csv', 'coords.mat', 'session.json']);
+  check('the readme explains why the frame PNGs are absent',
+    videoReadme.includes('フレームごとの PNG について') && !videoReadme.includes('### plot_frame_XXXX.png'));
+  openSettings();
+  await waitFor(() => els.settings.open);
+  els.setFramePngs.checked = true;
+  els.setOk.click();
+  await waitFor(() => !els.settings.open);
+  check('the setting can turn them back on', state.settings.framePngs === true, state.settings.framePngs);
   out.pngs['e2e_video_overlay.png'] = await toB64(imgs[1].data);
 
   out.logLines = Array.from(document.querySelectorAll('#log div')).map((d) => d.textContent);

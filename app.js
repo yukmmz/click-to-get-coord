@@ -23,6 +23,9 @@ const els = {
   prev: /** @type {HTMLButtonElement} */ (document.getElementById('btn-prev')),
   next: /** @type {HTMLButtonElement} */ (document.getElementById('btn-next')),
   jump: /** @type {HTMLButtonElement} */ (document.getElementById('btn-jump')),
+  frameStep: /** @type {HTMLInputElement} */ (document.getElementById('frame-step')),
+  seekRow: /** @type {HTMLElement} */ (document.getElementById('seek-row')),
+  seek: /** @type {HTMLInputElement} */ (document.getElementById('seek')),
   frameLabel: /** @type {HTMLElement} */ (document.getElementById('frame-label')),
   frameTime: /** @type {HTMLElement} */ (document.getElementById('frame-time')),
   pointCount: /** @type {HTMLElement} */ (document.getElementById('point-count')),
@@ -40,6 +43,7 @@ const els = {
   setDiameter: /** @type {HTMLInputElement} */ (document.getElementById('set-diameter')),
   setEqualAspect: /** @type {HTMLInputElement} */ (document.getElementById('set-equal-aspect')),
   setMarkerEdge: /** @type {HTMLInputElement} */ (document.getElementById('set-marker-edge')),
+  setFramePngs: /** @type {HTMLInputElement} */ (document.getElementById('set-frame-pngs')),
   setIndexAuto: /** @type {HTMLInputElement} */ (document.getElementById('set-index-auto')),
   setIndexColor: /** @type {HTMLInputElement} */ (document.getElementById('set-index-color')),
   setCancel: /** @type {HTMLButtonElement} */ (document.getElementById('set-cancel')),
@@ -110,6 +114,12 @@ const state = {
     indexColor: '#1971c2',
     /** keep the exported plot's x and y at the same units-per-pixel */
     equalAspect: false,
+    /**
+     * Write plot_frame_XXXX.png / overlay_frame_XXXX.png. Set from the source kind when
+     * a file is opened: on for images, off for video, where hundreds of annotated frames
+     * would mean hundreds of PNGs and a long export.
+     */
+    framePngs: true,
   },
   /** canvas view transform, in CSS pixels: image point (ix,iy) -> (tx + ix*scale, ty + iy*scale) */
   view: { scale: 1, tx: 0, ty: 0 },
@@ -117,6 +127,8 @@ const state = {
   busy: false,
   /** set when the view should snap back to "whole frame visible" on the next draw */
   needsFit: true,
+  /** how many frames one press of prev/next moves */
+  frameStep: 1,
   /** 1 or 2 while the calibration coordinate dialog is open, 0 otherwise */
   awaitingCalibInput: 0,
 };
@@ -417,11 +429,15 @@ async function loadFiles(files) {
     }
 
     resetAnnotations();
+    state.settings.framePngs = state.source.kind === 'images';
     els.canvas.style.display = 'block';
     els.placeholder.style.display = 'none';
     setEnabled(true);
     updateFpsUi();
     log(`読み込み完了: ${state.source.name} — ${state.source.frameCount} フレーム, ${state.source.width}x${state.source.height} px`);
+    if (!state.settings.framePngs) {
+      log('動画のため、フレームごとの PNG（plot / overlay）の書き出しは既定でオフです。設定（e）でオンにできます。');
+    }
     enterCalibMode();
     await showFrame(0);
   } catch (err) {
@@ -438,6 +454,9 @@ async function loadFiles(files) {
     els.prev.disabled = true;
     els.next.disabled = true;
     els.jump.disabled = true;
+    els.frameStep.disabled = true;
+    els.seek.disabled = true;
+    els.seekRow.hidden = true;
     els.save.disabled = true;
     els.loadSession.disabled = true;
     els.zoomIn.disabled = true;
@@ -460,6 +479,7 @@ function resetAnnotations() {
   state.frameIndex = 0;
   state.dirty = false;
   state.needsFit = true;
+  setFrameStep(1);
 }
 
 /** @param {boolean} enabled */
@@ -468,6 +488,9 @@ function setEnabled(enabled) {
   els.prev.disabled = !multi;
   els.next.disabled = !multi;
   els.jump.disabled = !multi;
+  els.frameStep.disabled = !multi;
+  els.seek.disabled = !multi;
+  els.seekRow.hidden = !multi;
   els.save.disabled = !enabled;
   els.loadSession.disabled = !enabled;
   els.zoomIn.disabled = !enabled;
@@ -622,6 +645,10 @@ function redraw() {
 function updateLabels() {
   const s = state.source;
   els.frameLabel.textContent = s ? `${state.frameIndex + 1} / ${s.frameCount}` : '- / -';
+  if (s) {
+    els.seek.max = String(Math.max(0, s.frameCount - 1));
+    els.seek.value = String(state.frameIndex);
+  }
   const t = state.frameTimes[state.frameIndex];
   els.frameTime.textContent = t === null || t === undefined ? '' : `t = ${t.toFixed(4)} s`;
   const here = (state.framesRaw[state.frameIndex] || []).length;
@@ -804,29 +831,82 @@ function handleDelClick(p) {
 
 // --- navigation --------------------------------------------------------------
 
-/** @param {number} delta */
-async function step(delta) {
-  if (!state.source || state.busy) return;
-  const next = state.frameIndex + delta;
-  if (next < 0 || next >= state.source.frameCount) return;
+/**
+ * Frame steps the user can reach with the , and . keys. The number box accepts
+ * anything, this is just a quick ladder.
+ */
+const STEP_LADDER = [1, 2, 5, 10, 20, 50, 100, 200, 500];
+
+/**
+ * @param {number} n
+ */
+function setFrameStep(n) {
+  if (!isFinite(n)) return;
+  const max = state.source ? Math.max(1, state.source.frameCount - 1) : 10000;
+  state.frameStep = Math.max(1, Math.min(max, Math.round(n)));
+  els.frameStep.value = String(state.frameStep);
+  updateLabels();
+}
+
+/** Move to the next/previous rung of the ladder relative to the current step. */
+function nudgeFrameStep(dir) {
+  const cur = state.frameStep;
+  if (dir > 0) {
+    setFrameStep(STEP_LADDER.find((v) => v > cur) || cur * 2);
+  } else {
+    const smaller = STEP_LADDER.filter((v) => v < cur);
+    setFrameStep(smaller.length ? smaller[smaller.length - 1] : 1);
+  }
+  log(`送り幅を ${state.frameStep} フレームにしました。`);
+}
+
+/**
+ * Go to a frame, coalescing requests: dragging the seek bar fires far faster than a
+ * video can be decoded, so only the latest target is honoured while one seek is running.
+ * @type {number|null}
+ */
+let pendingSeek = null;
+
+/** @param {number} index */
+async function requestSeek(index) {
+  if (!state.source) return;
+  const target = Math.max(0, Math.min(state.source.frameCount - 1, Math.round(index)));
+  if (state.busy) {
+    pendingSeek = target;
+    return;
+  }
   state.busy = true;
   try {
-    await showFrame(next);
+    let next = target;
+    while (next !== null) {
+      pendingSeek = null;
+      await showFrame(next);
+      next = pendingSeek;
+    }
   } finally {
+    pendingSeek = null;
     state.busy = false;
   }
+}
+
+/**
+ * Move by the current frame step. Near an end it clamps instead of refusing to move,
+ * so a large step still lands on the first/last frame.
+ * @param {number} delta -1 or +1
+ */
+async function step(delta) {
+  if (!state.source) return;
+  const next = Math.max(0, Math.min(state.source.frameCount - 1,
+    state.frameIndex + delta * state.frameStep));
+  if (next === state.frameIndex) return;
+  await requestSeek(next);
 }
 
 async function jumpDialog() {
   if (!state.source) return;
   const n = await askFrameNumber(state.source.frameCount, state.frameIndex + 1);
   if (n === null) return;
-  state.busy = true;
-  try {
-    await showFrame(n - 1);
-  } finally {
-    state.busy = false;
-  }
+  await requestSeek(n - 1);
 }
 
 // --- export ------------------------------------------------------------------
@@ -908,6 +988,17 @@ async function save() {
     if (!go) return;
   }
 
+  if (state.settings.framePngs) {
+    const n = state.framesRaw.filter((pts) => pts.length > 0).length;
+    // rendering is a seek + two canvas encodes per frame, so a long video is a long wait
+    if (n > 30 && !await showConfirm(
+      `${n} フレーム分の PNG（plot と overlay）を書き出します。${n * 2} 枚になり時間がかかります。続けますか？`,
+      { title: 'フレームごとの PNG', okLabel: '書き出す', cancelLabel: 'やめる' })) {
+      log('保存を中止しました。設定（e）でフレームごとの PNG をオフにできます。', 'warn');
+      return;
+    }
+  }
+
   const anyWin = /** @type {any} */ (window);
   const hasDirPicker = typeof anyWin.showDirectoryPicker === 'function';
   /** @type {any} */
@@ -939,15 +1030,20 @@ async function save() {
     for (let i = 0; i < state.framesRaw.length; i++) {
       if (state.framesRaw[i].length > 0) framesWithPoints.push(i);
     }
-    for (let k = 0; k < framesWithPoints.length; k++) {
-      const i = framesWithPoints[k];
-      setStatus(`画像を生成中... (${k + 1} / ${framesWithPoints.length})`);
-      files.push(...await renderFrameImages(i, dataset));
+    if (state.settings.framePngs) {
+      for (let k = 0; k < framesWithPoints.length; k++) {
+        const i = framesWithPoints[k];
+        setStatus(`画像を生成中... (${k + 1} / ${framesWithPoints.length})`);
+        files.push(...await renderFrameImages(i, dataset));
+      }
+    } else if (framesWithPoints.length > 0) {
+      log(`フレームごとの PNG は書き出しません（対象 ${framesWithPoints.length} フレーム）。`
+        + '設定（e）の「フレームごとの PNG を書き出す」でオンにできます。');
     }
 
     files.push({
-      name: 'README.txt',
-      data: new Blob([buildReadme(dataset, files.map((f) => f.name).concat(['README.txt']).sort())], { type: 'text/plain' }),
+      name: 'README.md',
+      data: new Blob([buildReadme(dataset, files.map((f) => f.name).concat(['README.md']).sort())], { type: 'text/markdown' }),
     });
 
     if (dir) {
@@ -1035,6 +1131,7 @@ function openSettings() {
   els.setShowIndex.checked = state.settings.showIndex;
   els.setEqualAspect.checked = state.settings.equalAspect;
   els.setMarkerEdge.checked = state.settings.markerEdge;
+  els.setFramePngs.checked = state.settings.framePngs;
   els.setIndexAuto.checked = state.settings.indexColorAuto;
   els.setIndexColor.value = state.settings.indexColor;
   placeDialogAwayFrom(els.settings, undefined);
@@ -1049,6 +1146,7 @@ function applySettings() {
   state.settings.showIndex = els.setShowIndex.checked;
   state.settings.equalAspect = els.setEqualAspect.checked;
   state.settings.markerEdge = els.setMarkerEdge.checked;
+  state.settings.framePngs = els.setFramePngs.checked;
   state.settings.indexColorAuto = els.setIndexAuto.checked;
   state.settings.indexColor = els.setIndexColor.value;
   redraw();
@@ -1089,6 +1187,8 @@ els.confirmCancel.addEventListener('click', () => els.dlgConfirm.close('cancel')
 els.setCancel.addEventListener('click', () => els.settings.close('cancel'));
 
 els.markerSize.addEventListener('change', () => setDiameter(Number(els.markerSize.value)));
+els.frameStep.addEventListener('change', () => setFrameStep(Number(els.frameStep.value)));
+els.seek.addEventListener('input', () => requestSeek(Number(els.seek.value)));
 els.zoomIn.addEventListener('click', () => zoomByButton(1.25));
 els.zoomOut.addEventListener('click', () => zoomByButton(1 / 1.25));
 els.zoomReset.addEventListener('click', () => { fitView(); redraw(); });
@@ -1164,6 +1264,8 @@ document.addEventListener('keydown', (e) => {
     case 'ArrowLeft': case 'z': step(-1); break;
     case '[': setDiameter(state.settings.diameter - 1); break;
     case ']': setDiameter(state.settings.diameter + 1); break;
+    case ',': nudgeFrameStep(-1); break;
+    case '.': nudgeFrameStep(1); break;
     case '+': case ';': case '=': zoomByButton(1.25); break;
     case '-': zoomByButton(1 / 1.25); break;
     case '0': fitView(); redraw(); break;

@@ -62,6 +62,19 @@ const readme = buildReadme(dataset, ['coords.mat', 'coords.csv', 'session.json']
 for (const needle of ['coords_raw', 'coords_real', 'scale_x', 'loadmat', 'frame_index', 'NaN']) {
   assert.ok(readme.includes(needle), `README must document "${needle}"`);
 }
+// it is Markdown: headings, tables and fenced code
+assert.ok(readme.startsWith('# click-to-get-coord'), 'starts with an H1');
+assert.ok(readme.includes('\n## 1. 入力データ'), 'has numbered sections');
+assert.ok(readme.includes('|---|---|'), 'has tables');
+assert.ok(readme.includes('```python'), 'has a fenced python example');
+assert.ok(!readme.includes('===='), 'no plain-text underlines left over');
+// with no frame PNGs written, it says so instead of describing files that are absent
+assert.ok(readme.includes('フレームごとの PNG'), 'explains the missing frame PNGs');
+assert.ok(!readme.includes('### plot_frame_XXXX.png'), 'does not document absent plots');
+// and describes them when they are there
+const withPngs = buildReadme(dataset, ['coords.mat', 'plot_frame_0000.png', 'overlay_frame_0000.png']);
+assert.ok(withPngs.includes('### plot_frame_XXXX.png') && withPngs.includes('### overlay_frame_XXXX.png'));
+assert.ok(!withPngs.includes('### フレームごとの PNG について'));
 
 // --- .mat --------------------------------------------------------------------
 const bytes = encodeMatV5(buildMatVars(dataset));
