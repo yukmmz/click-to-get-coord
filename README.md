@@ -5,6 +5,8 @@ Click points on a **video or image** in your browser and get them back as
 
 No upload, no server, no install — everything runs locally in the browser.
 
+**→ [Open App](https://yukmmz.github.io/click-to-get-coord/)**
+
 ## Features
 
 - **Video or images** — step through video frames, or load a set of still images as a sequence
