@@ -16,3 +16,7 @@ memo.tmp.md
 
 # --- Claude Code hook artifacts (session-local) ---
 tmp/
+
+
+# memo
+memo.tmp.md
