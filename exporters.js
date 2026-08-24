@@ -26,6 +26,10 @@
  * @property {Pt[][]} framesReal           the same points in real coords (NaN when uncalibrated)
  */
 
+/** Where the app lives, so a stray output folder can always be traced back to it. */
+const APP_URL = 'https://yukmmz.github.io/click-to-get-coord/';
+const SOURCE_URL = 'https://github.com/yukmmz/click-to-get-coord';
+
 const CSV_COLUMNS = ['frame_index', 'frame_number', 'time_sec', 'point_index', 'x_img', 'y_img', 'x_real', 'y_real'];
 
 /** @param {number} v */
@@ -43,6 +47,8 @@ function buildCsv(d) {
   const t = d.transform;
   const lines = [
     `# click-to-get-coord ${d.appVersion} — coordinate export`,
+    `# app: ${APP_URL}`,
+    `# source: ${SOURCE_URL}`,
     `# exported_at: ${d.exportedAt}`,
     `# source_kind: ${d.sourceKind}`,
     `# source_name: ${d.sourceName}`,
@@ -132,6 +138,8 @@ function buildSessionJson(d) {
     format: 'click-to-get-coord/session',
     formatVersion: 1,
     appVersion: d.appVersion,
+    appUrl: APP_URL,
+    sourceUrl: SOURCE_URL,
     exportedAt: d.exportedAt,
     source: {
       kind: d.sourceKind,
@@ -199,9 +207,12 @@ ${d.sourceFiles.map((f, i) => `| ${i} | ${f} |`).join('\n')}`;
 |---|---|
 | 生成アプリ | click-to-get-coord ${d.appVersion} |
 | 出力日時 | ${d.exportedAt} |
+| アプリ | ${APP_URL} |
+| ソースコード | ${SOURCE_URL} |
 
 ブラウザ上で動画または画像をクリックし、クリック点の画素座標を2点キャリブレーションで
-実世界座標へ変換して記録するツールです。`);
+実世界座標へ変換して記録するツールです。同じアプリを開けば、下記の \`session.json\` から
+この作業を再開できます。`);
 
   sections.push(`## 1. 入力データ
 

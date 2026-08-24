@@ -64,6 +64,13 @@ for (const needle of ['coords_raw', 'coords_real', 'scale_x', 'loadmat', 'frame_
 }
 // it is Markdown: headings, tables and fenced code
 assert.ok(readme.startsWith('# click-to-get-coord'), 'starts with an H1');
+// the output must say where it came from, both the app and its source
+assert.ok(readme.includes('https://yukmmz.github.io/click-to-get-coord/'), 'README links the app');
+assert.ok(readme.includes('https://github.com/yukmmz/click-to-get-coord'), 'README links the source');
+assert.ok(csv.includes('# app: https://yukmmz.github.io/click-to-get-coord/'), 'CSV header links the app');
+assert.ok(csv.includes('# source: https://github.com/yukmmz/click-to-get-coord'), 'CSV header links the source');
+assert.strictEqual(session.appUrl, 'https://yukmmz.github.io/click-to-get-coord/');
+assert.strictEqual(session.sourceUrl, 'https://github.com/yukmmz/click-to-get-coord');
 assert.ok(readme.includes('\n## 1. 入力データ'), 'has numbered sections');
 assert.ok(readme.includes('|---|---|'), 'has tables');
 assert.ok(readme.includes('```python'), 'has a fenced python example');
