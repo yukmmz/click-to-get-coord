@@ -1,5 +1,8 @@
 * { box-sizing: border-box; }
 
+/* .group sets display:flex, which would otherwise defeat the hidden attribute */
+[hidden] { display: none !important; }
+
 html, body {
   height: 100%;
   margin: 0;
@@ -13,17 +16,31 @@ body {
   flex-direction: column;
 }
 
-#toolbar {
+/* --- toolbar / nav --- */
+
+#toolbar, #navbar {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   padding: 8px 10px;
   background: #262626;
   border-bottom: 1px solid #3a3a3a;
   flex-wrap: wrap;
 }
 
-#toolbar button {
+#navbar { padding: 6px 10px; }
+
+.group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.group + .group { margin-left: 14px; }
+.group.right { margin-left: auto; }
+.spacer { flex: 1; }
+
+button {
   padding: 6px 12px;
   font-size: 14px;
   color: #eee;
@@ -33,37 +50,94 @@ body {
   cursor: pointer;
 }
 
-#toolbar button:hover:not(:disabled) { background: #474747; }
-#toolbar button:disabled { opacity: 0.4; cursor: default; }
-#toolbar button.active { background: #2f6feb; border-color: #2f6feb; }
+button:hover:not(:disabled) { background: #474747; }
+button:disabled { opacity: 0.4; cursor: default; }
+button.mode.active { background: #2f6feb; border-color: #2f6feb; }
 
-#toolbar .nav { min-width: 40px; }
-#toolbar .sep { width: 12px; }
+.label, .hint {
+  font-size: 13px;
+  color: #9a9a9a;
+}
 
 #frame-label {
-  min-width: 90px;
+  min-width: 96px;
   text-align: center;
   font-variant-numeric: tabular-nums;
   font-size: 14px;
 }
 
+input[type="number"], input[type="color"] {
+  background: #1b1b1b;
+  color: #eee;
+  border: 1px solid #4d4d4d;
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-size: 13px;
+}
+
+input[type="number"] { width: 88px; }
+input[type="color"] { width: 44px; height: 28px; padding: 2px; }
+
+/* --- stage --- */
+
 #stage {
   position: relative;
   flex: 1;
+  min-height: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  background: #101010;
 }
 
+/* The canvas covers the whole stage; the frame is positioned inside it by the
+   view transform (zoom / pan), so panning never moves the element itself. */
 #canvas {
-  max-width: 100%;
-  max-height: 100%;
-  cursor: crosshair;
+  width: 100%;
+  height: 100%;
   display: none;
+  cursor: crosshair;
+  touch-action: none;
 }
 
 #placeholder { color: #888; font-size: 15px; }
+
+#navbar .sep {
+  width: 1px;
+  height: 20px;
+  margin: 0 8px;
+  background: #3a3a3a;
+}
+
+#zoom-label {
+  min-width: 54px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+}
+
+#marker-size { width: 64px; }
+
+#navbar button { padding: 5px 10px; }
+
+/* --- log / status --- */
+
+#logbox {
+  height: 96px;
+  overflow-y: auto;
+  background: #1f1f1f;
+  border-top: 1px solid #3a3a3a;
+  padding: 6px 10px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #c8c8c8;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+#log div { white-space: pre-wrap; }
+#log div.warn { color: #ffcc66; }
+#log div.err { color: #ff8080; }
 
 #status {
   padding: 6px 10px;
@@ -72,3 +146,79 @@ body {
   background: #262626;
   border-top: 1px solid #3a3a3a;
 }
+
+
+/* --- guide bar: always says what to do next --- */
+
+#guide {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 10px 14px;
+  background: #16324f;
+  border-bottom: 1px solid #24507d;
+  color: #dceaff;
+  font-size: 15px;
+}
+
+#guide.warn { background: #4a3410; border-bottom-color: #7a5416; color: #ffe0a3; }
+#guide.done { background: #143a2a; border-bottom-color: #1f6a4a; color: #b9f0d4; }
+
+#guide-step {
+  flex: none;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: #2f6feb;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+#guide.warn #guide-step { background: #b3730c; }
+#guide.done #guide-step { background: #1f8a5f; }
+
+#guide-text { font-weight: 600; }
+
+#guide-sub {
+  color: inherit;
+  opacity: 0.75;
+  font-size: 13px;
+}
+
+/* --- dialogs --- */
+
+
+dialog {
+  background: #262626;
+  color: #eee;
+  border: 1px solid #4d4d4d;
+  border-radius: 8px;
+  padding: 20px 24px;
+  max-width: 640px;
+  line-height: 1.6;
+}
+
+dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
+
+/* Modal dialogs are centred with margin:auto — overriding the margins parks the dialog
+   in the corner furthest from the point being clicked, so it never hides it. */
+dialog.pos-left { margin-left: 32px; margin-right: auto; }
+dialog.pos-right { margin-right: 32px; margin-left: auto; }
+/* clears the toolbar + guide bar + navbar, so the dialog sits over the image area only */
+dialog.pos-top { margin-top: 140px; margin-bottom: auto; }
+dialog.pos-bottom { margin-bottom: 32px; margin-top: auto; }
+dialog h2 { margin: 0 0 12px; font-size: 17px; }
+dialog h3 { margin: 18px 0 6px; font-size: 14px; color: #9ec5ff; }
+dialog label { display: flex; align-items: center; gap: 10px; margin: 10px 0; font-size: 14px; }
+dialog .lead { margin: 6px 0 14px; font-size: 14px; }
+dialog .fields { display: flex; gap: 18px; margin: 14px 0; }
+dialog .fields label { margin: 0; }
+dialog .fields input[type="number"] { width: 130px; font-size: 15px; padding: 6px 8px; }
+dialog button.primary { background: #2f6feb; border-color: #2f6feb; }
+dialog button.primary:hover { background: #4680f0; }
+dialog menu { display: flex; justify-content: flex-end; gap: 8px; margin: 18px 0 0; padding: 0; }
+dialog table { border-collapse: collapse; font-size: 13.5px; }
+dialog td { padding: 2px 14px 2px 0; }
+dialog code { background: #1b1b1b; padding: 1px 5px; border-radius: 3px; font-size: 12.5px; }
+dialog ol, dialog ul { margin: 6px 0; padding-left: 22px; font-size: 14px; }

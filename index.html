@@ -8,33 +8,216 @@
 </head>
 <body>
 <header id="toolbar">
-  <input type="file" id="file-input" accept="video/*,image/*" multiple hidden>
-  <button id="btn-open">ファイルを開く</button>
+  <div class="group">
+    <button id="btn-open" title="Ctrl+O">開く</button>
+    <button id="btn-load-session" disabled
+      title="前回の保存フォルダにある session.json を読み込み、キャリブレーションとクリック点を復元して続きから作業します">作業を再開</button>
+    <button id="btn-save" disabled title="Ctrl+S">保存</button>
+  </div>
 
-  <span class="sep"></span>
+  <div class="group" id="fps-group" hidden>
+    <label for="fps-input">fps</label>
+    <input type="number" id="fps-input" min="1" max="1000" step="0.001">
+    <span id="fps-source" class="hint"></span>
+  </div>
 
-  <button id="btn-prev" class="nav" disabled>◀</button>
-  <span id="frame-label">- / -</span>
-  <button id="btn-next" class="nav" disabled>▶</button>
+  <div class="group modes">
+    <span class="label">モード</span>
+    <button id="btn-calib" class="mode" data-mode="calib" disabled title="c">Calibration (c)</button>
+    <button id="btn-add" class="mode" data-mode="add" disabled title="a">Add (a)</button>
+    <button id="btn-del" class="mode" data-mode="del" disabled title="d">Delete (d)</button>
+  </div>
 
-  <span class="sep"></span>
+  <div class="group">
+    <label for="marker-size" title="点の直径（画面上のピクセル）。[ で細く、] で太く">点の直径</label>
+    <input type="number" id="marker-size" min="1" max="40" step="1" title="[ で細く、] で太く">
+    <span class="hint">[ ]</span>
+  </div>
 
-  <button id="btn-calib" class="mode" data-mode="calib" disabled>Calibration (c)</button>
-  <button id="btn-add"   class="mode" data-mode="add"   disabled>Add (a)</button>
-  <button id="btn-del"   class="mode" data-mode="del"   disabled>Delete (d)</button>
-
-  <span class="sep"></span>
-
-  <button id="btn-save" disabled>保存</button>
+  <div class="group right">
+    <button id="btn-settings" title="e">設定 (e)</button>
+    <button id="btn-help" title="h">ヘルプ (h)</button>
+  </div>
 </header>
+
+<!-- 次にやることを常に表示する案内バー -->
+<div id="guide">
+  <span id="guide-step">STEP 1</span>
+  <span id="guide-text">動画または画像ファイルを開いてください</span>
+  <span id="guide-sub"></span>
+</div>
+
+<nav id="navbar">
+  <button id="btn-prev" disabled title="← / z">◀</button>
+  <span id="frame-label">- / -</span>
+  <button id="btn-next" disabled title="→ / x">▶</button>
+  <button id="btn-jump" disabled title="j">ジャンプ (j)</button>
+  <span id="frame-time" class="hint"></span>
+
+  <span class="sep"></span>
+
+  <span class="label">表示</span>
+  <button id="btn-zoom-out" disabled title="縮小（- キー）">－</button>
+  <span id="zoom-label">100%</span>
+  <button id="btn-zoom-in" disabled title="拡大（+ キー）">＋</button>
+  <button id="btn-zoom-reset" disabled title="全体表示に戻す（0 キー）">全体</button>
+  <span class="hint">ピンチ/Ctrl+ホイール=拡大縮小、2本指スクロール=移動</span>
+
+  <span class="spacer"></span>
+  <span id="point-count" class="hint"></span>
+</nav>
 
 <main id="stage">
   <canvas id="canvas"></canvas>
-  <p id="placeholder">動画または画像ファイルを開いてください</p>
+  <p id="placeholder">動画または画像ファイルを開いてください（ドラッグ＆ドロップも可）</p>
 </main>
+
+<section id="logbox">
+  <div id="log"></div>
+</section>
 
 <footer id="status">ready</footer>
 
+<!-- キャリブレーション点の実世界座標入力 -->
+<dialog id="dlg-calib">
+  <form method="dialog">
+    <h2 id="calib-title">キャリブレーション 1点目の実世界座標</h2>
+    <p class="hint" id="calib-pixel"></p>
+    <p class="lead">この点の<b>実際の座標</b>を入力してください。単位は任意（mm でも m でも図面上の値でも可）。</p>
+    <div class="fields">
+      <label>x <input type="number" id="calib-x" step="any" required autofocus></label>
+      <label>y <input type="number" id="calib-y" step="any" required></label>
+    </div>
+    <p class="hint" id="calib-note"></p>
+    <menu>
+      <button type="button" id="calib-cancel">キャンセル</button>
+      <button type="submit" value="ok" class="primary">OK（Enter）</button>
+    </menu>
+  </form>
+</dialog>
+
+<!-- フレームジャンプ -->
+<dialog id="dlg-jump">
+  <form method="dialog">
+    <h2>フレームへ移動</h2>
+    <div class="fields">
+      <label>フレーム番号 <input type="number" id="jump-value" min="1" step="1" required autofocus></label>
+    </div>
+    <p class="hint" id="jump-range"></p>
+    <menu>
+      <button type="button" id="jump-cancel">キャンセル</button>
+      <button type="submit" value="ok" class="primary">移動（Enter）</button>
+    </menu>
+  </form>
+</dialog>
+
+<!-- 確認 / メッセージ -->
+<dialog id="dlg-confirm">
+  <form method="dialog">
+    <h2 id="confirm-title">確認</h2>
+    <p class="lead" id="confirm-text"></p>
+    <menu>
+      <button type="button" id="confirm-cancel">キャンセル</button>
+      <button type="submit" value="ok" class="primary" id="confirm-ok">OK</button>
+    </menu>
+  </form>
+</dialog>
+
+<dialog id="dlg-settings">
+  <form method="dialog">
+    <h2>設定</h2>
+    <label>点の直径（px） <input type="number" id="set-diameter" min="1" max="40" step="1"></label>
+    <label>クリック点の色 <input type="color" id="set-point-color"></label>
+    <label>キャリブレーション点の色 <input type="color" id="set-calib-color"></label>
+    <label><input type="checkbox" id="set-index-auto"> 点の番号を点と同じ色にする</label>
+    <label>点の番号の色（上のチェックを外したとき） <input type="color" id="set-index-color"></label>
+    <label><input type="checkbox" id="set-marker-edge"> 点に白い縁取りをつける（太さは点の大きさに連動）</label>
+    <label><input type="checkbox" id="set-smooth"> プロットの線を滑らかな曲線にする</label>
+    <label><input type="checkbox" id="set-show-index"> 点の番号を表示する</label>
+    <label><input type="checkbox" id="set-equal-aspect"> プロットの縦横比を 1:1 に固定する（長さの計測など、x と y が同じ量のとき）</label>
+    <menu>
+      <button type="button" id="set-cancel">キャンセル</button>
+      <button type="submit" value="ok" class="primary" id="set-ok">OK</button>
+    </menu>
+  </form>
+</dialog>
+
+<dialog id="dlg-help">
+  <h2>使い方</h2>
+  <ol>
+    <li><b>開く</b>（Ctrl+O）で動画ファイル、または画像ファイル（複数可）を選ぶ。</li>
+    <li>自動的に <b>Calibration モード</b>に入る。画像上の2点をクリックし、それぞれの実世界座標を
+      入力する。<b>x も y も異なる2点</b>を選ぶこと。</li>
+    <li>2点入力すると自動的に <b>Add モード</b>に入る。クリックで点を記録する。</li>
+    <li>消したい点があれば <b>Delete モード</b>（d）でその点の近くをクリックする。</li>
+    <li><b>保存</b>（Ctrl+S）で出力先フォルダを選ぶと、そのフォルダに全ファイルが書き出される。</li>
+  </ol>
+
+  <h3>キャリブレーションのやり直し</h3>
+  <p>点を打っている途中でも <b>c</b> キー（または Calibration ボタン）でやり直せます。</p>
+  <ul>
+    <li>記録済みのクリック点は<b>消えません</b>。新しい2点が確定した時点で、全点の実世界座標が
+      新しい変換で計算し直されます（画素座標を保持しているため）。</li>
+    <li>新しい2点が確定するまで、<b>今のキャリブレーションは有効なまま</b>です。1点だけ入れて
+      やめても、前の設定は失われません（a キーで Add に戻れば中断できます）。</li>
+    <li>やり直し中は、前のキャリブレーション点が薄く、新しい点が濃く表示されます。</li>
+  </ul>
+
+  <h3>拡大・移動</h3>
+  <table>
+    <tr><td>トラックパッドでピンチ</td><td>拡大・縮小（カーソル位置を中心に）</td></tr>
+    <tr><td>Ctrl/Cmd + ホイール</td><td>同上（マウスの場合）</td></tr>
+    <tr><td>2本指スクロール</td><td>表示位置の移動（パン）</td></tr>
+    <tr><td>ホイール / Shift+ホイール</td><td>上下 / 左右に移動（マウスの場合）</td></tr>
+    <tr><td>+ / -</td><td>拡大 / 縮小</td></tr>
+    <tr><td>0</td><td>全体表示に戻す</td></tr>
+  </table>
+  <p class="hint">3本指スクロールは macOS 自身が使うため、ブラウザには届きません。</p>
+
+  <h3>ショートカット</h3>
+  <table>
+    <tr><td>Ctrl+O</td><td>ファイルを開く</td></tr>
+    <tr><td>Ctrl+S</td><td>保存</td></tr>
+    <tr><td>c / a / d</td><td>Calibration / Add / Delete モード</td></tr>
+    <tr><td>→ または x</td><td>次のフレーム</td></tr>
+    <tr><td>← または z</td><td>前のフレーム</td></tr>
+    <tr><td>j</td><td>フレーム番号を指定して移動</td></tr>
+    <tr><td>[ / ]</td><td>点の直径を小さく / 大きく</td></tr>
+    <tr><td>e</td><td>設定</td></tr>
+    <tr><td>h</td><td>このヘルプ</td></tr>
+  </table>
+
+  <h3>「作業を再開」とは</h3>
+  <p>保存すると、出力フォルダに <code>session.json</code>（キャリブレーションの2点と変換係数、
+    フレームごとのクリック点）が書き出されます。<b>作業を再開</b>はこれを読み戻す機能です。</p>
+  <ol>
+    <li>前回と<b>同じ動画・画像</b>を「開く」で読み込む（画像そのものは session.json に入っていません）</li>
+    <li><b>作業を再開</b>を押して、前回の <code>session.json</code> を選ぶ</li>
+    <li>キャリブレーションと打った点が全部戻るので、続きから追加・削除できる</li>
+  </ol>
+  <p class="hint">用途: 途中で中断したとき、点を打ち足したいとき、キャリブレーションだけやり直したいとき。</p>
+
+  <h3>保存されるもの</h3>
+  <ul>
+    <li><code>coords.mat</code> — MATLAB / scipy で読めるバイナリ（<code>coords_raw</code>, <code>coords_real</code> ほか）</li>
+    <li><code>coords.csv</code> — 全点を1ファイルにまとめたテキスト</li>
+    <li><code>plot_frame_XXXX.png</code> — 実世界座標系でのクリック点と、それを結ぶ曲線</li>
+    <li><code>overlay_frame_XXXX.png</code> — 元画像にクリック点を重ねた検証用画像</li>
+    <li><code>session.json</code> — 作業再開用の状態</li>
+    <li><code>README.txt</code> — 上記すべての読み方の説明</li>
+  </ul>
+  <form method="dialog"><menu><button type="submit" value="ok" class="primary">閉じる</button></menu></form>
+</dialog>
+
+<input type="file" id="file-input" accept="video/*,image/*" multiple hidden>
+<input type="file" id="session-input" accept="application/json,.json" hidden>
+
+<script src="calib.js"></script>
+<script src="points.js"></script>
+<script src="matwriter.js"></script>
+<script src="exporters.js"></script>
+<script src="plot.js"></script>
+<script src="source.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

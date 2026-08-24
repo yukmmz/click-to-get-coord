@@ -1,48 +1,68 @@
 # 設計メモ
 
-移植元 `references/clickapp_tkcv-main`（Python + Tkinter + OpenCV）を Web に載せ替えるにあたっての、
-未決事項と検討メモ。決まった事項はここに追記していく。
+移植元 `references/clickapp_tkcv-main`（Python + Tkinter + OpenCV）を Web に載せ替えるにあたっての
+決定事項と、残っている論点。
 
-## 1. フレーム精度のシーク（動画）
+## 決定事項
 
-移植元は OpenCV の `VideoCapture` でフレーム番号を直接指定できるが、ブラウザの `<video>` は
-**時刻ベース**のシークしか持たない。候補:
+### 1. 言語・ビルド
 
-- `video.currentTime += 1 / fps` + `seeked` イベント — 実装が軽い。fps を知る必要があり、
-  可変フレームレート動画では累積誤差が出る。
-- `requestVideoFrameCallback()` — 実際に表示されたフレームの `mediaTime` が取れる。
-  Chrome / Safari は対応、Firefox は未対応。
-- `WebCodecs` (`VideoDecoder`) — 真のフレーム単位。実装コストが高く、対応ブラウザが限られる。
+素の JavaScript + JSDoc 型注釈。ビルド工程なし、npm 依存なし。
+`jsconfig.json` で `checkJs` を有効にしてあるので、VS Code は同梱の TypeScript サービスで
+`.js` をそのまま型チェックする（追加インストール不要）。CI 的に回したい場合のみ
+`npx tsc --noEmit`（typescript のインストールが必要）。
 
-**暫定**: 骨組みでは fps を仮定した時刻シーク。実運用でズレが問題になるかを確認してから
-`requestVideoFrameCallback` へ寄せるか判断する。
+TypeScript を採用しなかった理由: `dist/` へのビルドが必須になり、GitHub Pages 直配信・
+依存ゼロという運用（兄弟アプリ `batch-image-cropper` / `mask-annotator` と共通）が崩れるため。
 
-## 2. 静止画対応（移植元に無い機能）
+### 2. フレーム精度のシーク（動画）
 
-- 単一画像は「1フレームの動画」として扱えば、モード・保存の処理を共通化できる。
-- 複数画像を読み込んだ場合はフレーム列として扱う（`batch-image-cropper` と同じ操作感）。
-- 内部表現を「フレーム列（`getFrame(i)` で描画できるもの）」に抽象化し、
-  動画ソースと画像ソースの差をその裏に隠すのが素直。
+`requestVideoFrameCallback` を使う。
 
-## 3. キャリブレーション
+- **fps 検出**: 読み込み直後に無音で数十フレーム再生し、`presentedFrames` と `mediaTime` の
+  差分から fps を実測する。23.976 / 29.97 / 30 / 59.94 などの標準値に 2% 以内で一致すれば
+  その値にスナップする。ツールバーで手動上書きも可能。
+- **シーク**: フレーム i へは `currentTime = (i + 0.5) / fps` で移動する。フレーム境界ちょうどを
+  狙うと丸めでどちらのフレームが出るか不定になるため、区間の中央を狙う。
+- **時刻の記録**: 表示されたフレームの `mediaTime` を実測して `frame_times` / `time_sec` に保存する。
+  フレーム番号は「先頭を 0 とする通し番号」であり、コンテナ内部のフレーム番号と厳密に
+  一致する保証はない。**出力では時刻の方が信頼できる**旨を README.txt に明記している。
+- `requestVideoFrameCallback` 非対応ブラウザ（Firefox）では 30 fps を仮定し、警告を出す。
 
-移植元は2点の画像座標と実世界座標から対応関係を作る（並進 + 等方スケール想定と思われる）。
-`references/clickapp_tkcv-main/click_app/click_gui.py` の該当箇所を読んで、同じ式を再現すること。
-射影変換（4点）へ拡張するかは、必要になってから検討する。
+WebCodecs（`VideoDecoder` + mp4box.js）による厳密なフレーム単位デコードは、CDN 依存が増え
+実装も重いため見送った。フレーム番号の厳密一致が要件になったら再検討する。
 
-## 4. 出力フォーマット
+`MediaRecorder` 由来の WebM など `duration` が `Infinity` を返すコンテナがあるため、
+末尾までシークして duration を確定させる処理を入れてある（`ensureDuration`）。
 
-移植元は SciPy の `.mat`（`coords_raw`・`coords_real`、いずれもフレーム数ぶんの可変長 cell 配列）。
-Web 版の候補:
+### 3. 静止画対応（移植元に無い機能）
 
-- **JSON** — 実装が楽。読み込み側（MATLAB / Python）で変換が要る。
-- **CSV**（`frame, index, x_raw, y_raw, x_real, y_real`） — 表計算・Python で扱いやすい。
-- **.mat 互換** — 既存の解析スクリプトをそのまま使えるが、JS からの書き出しは実装が重い。
+動画と画像を「フレーム列」という同一インターフェース（`getFrame(index)`）の裏に隠した。
+複数画像はファイル名の自然順（数値を数値として比較）でフレーム列になる。
+画像サイズが揃っていない場合は警告を出す（キャリブレーションは全フレーム共通のため）。
 
-**暫定**: JSON と CSV の両方を出す。既存の `.mat` 前提の解析がある場合は、
-変換スクリプトを `scratch/` に置いて対応する。
+### 4. キャリブレーション
 
-## 5. 大きな動画の扱い
+移植元と同じ「回転なし・軸ごとの線形変換」。`calib.js` に純関数として実装し、
+`test_calib.js` で移植元の式と一致することを検証している。
 
-`URL.createObjectURL(file)` でローカルファイルをそのまま `<video>` に渡すため、
-ファイルサイズによるメモリ制約は緩い。アップロードは一切しない。
+### 5. 出力フォーマット
+
+`.mat`（MATLAB Level 5, 無圧縮）を自前のエンコーダ（`matwriter.js`）で書き出す。
+`coords_raw` / `coords_real` は移植元と同じ 1×N cell 配列（各セルは n_i×2 double）なので、
+既存の解析コードがそのまま使える。加えて CSV・PNG・session.json・README.txt を出力する。
+
+実装上の落とし穴（再発防止のため記録）:
+
+- `miUINT16` の型コードは **4**。11 は予約値で、これを使うと `scipy.io.loadmat` が
+  セグメンテーション違反で落ちる。
+- char 配列は `miUTF8`（型 16）＋ **文字数（コードポイント数）** を次元に指定するのが正解。
+  バイト数を次元にすると SciPy が "buffer is too small" で失敗し、`miUINT16` は
+  SciPy 側の uint16 codec が UTF-8 のとき誤読される。日本語ファイル名で検証済み。
+
+## 残っている論点
+
+- **射影変換（4点キャリブレーション）**: 現状は軸別線形変換のみ。カメラが斜めから撮っている
+  場合は誤差が出る。必要になったら 4点からのホモグラフィに拡張する。
+- **点の編集**: 現状は追加と削除のみ。ドラッグでの移動や Undo は未実装。
+- **同じフォルダへの再保存**: 同名ファイルを上書きする。世代を残したい場合はフォルダを分ける。
