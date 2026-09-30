@@ -1,11 +1,534 @@
 // click-to-get-coord — UI, state and export flow.
 //
 // Depends on the globals defined by the other scripts loaded before this one:
-//   calib.js  points.js  matwriter.js  exporters.js  plot.js  source.js
+//   i18n.js  calib.js  points.js  matwriter.js  exporters.js  plot.js  source.js
+//
+// Only the UI is translated (STRINGS below). Everything written to the output folder
+// (coords.mat / coords.csv / PNGs / session.json / README.md) keeps one fixed format
+// whatever the UI language is: downstream analysis code depends on it.
 
 'use strict';
 
-const APP_VERSION = '1.0.0';
+/* Single source of truth for the version; session.json records it. The app and source
+ * URLs are APP_URL / SOURCE_URL in exporters.js (shared global scope of the classic
+ * scripts), and the QR images (qr.svg / src-qr.svg) encode those same URLs. */
+const APP_VERSION = '1.1.0';
+
+const LANG_KEY = 'click-to-get-coord/lang';
+const SEEN_VERSION_KEY = 'click-to-get-coord/seen-version';
+
+/* What changed, newest first, shown from the settings sheet and from the version next
+ * to the app name. Bumping APP_VERSION means adding an entry here (test_wiring.js checks
+ * that the first entry matches). Written for users, in both languages. */
+const CHANGELOG = [
+  { version: '1.1.0', date: '2026-10-01', items: [
+    { ja: '左上にアプリ名とバージョンを表示するようにしました。バージョンを押すと更新履歴が開きます',
+      en: 'The app name and version are shown at the top left; click the version to open this changelog' },
+    { ja: '設定を ⚙ ボタンの画面にまとめました。変更はその場で反映されます。言語・共有・更新履歴・他のアプリもここから',
+      en: 'Settings moved to the ⚙ button and apply immediately; language, sharing, changelog and other apps are there too' },
+    { ja: '全画面表示ボタン（⛶）を追加しました',
+      en: 'Added a full-screen button (⛶)' },
+    { ja: '画面を英語でも使えるようにしました（書き出すファイルの中身は変わりません）',
+      en: 'The app can be used in English (the exported files are unchanged)' },
+    { ja: 'QR コードでアプリとソースを共有できるようにしました',
+      en: 'Share the app and its source by QR code' },
+  ] },
+  { version: '1.0.0', date: '2026-08-25', items: [
+    { ja: '最初の公開版: 動画・画像の上をクリックして点を記録し、2点キャリブレーションで実世界座標に変換',
+      en: 'First release: click points on a video or images and convert them to real-world coordinates with a two-point calibration' },
+    { ja: 'シークバーと送り幅でのフレーム移動、拡大・移動',
+      en: 'Frame navigation with a seek bar and a frame step, plus zoom and pan' },
+    { ja: 'CSV / .mat / PNG / session.json / README の書き出しと、session.json からの作業の再開',
+      en: 'Export to CSV / .mat / PNG / session.json / README, and resume work from session.json' },
+  ] },
+];
+
+/* UI strings. `c.*` keys are the common ones every yukmmz.github.io app uses with the same
+ * wording; the rest belong to this app. Values used with data-i18n-html are HTML. */
+const STRINGS = {
+  ja: {
+    'c.settings': '設定', 'c.close': '閉じる', 'c.language': '言語', 'c.share': '共有',
+    'c.showQr': 'QR コードを表示', 'c.changelog': '更新履歴', 'c.showChangelog': '表示',
+    'c.otherApps': '他のアプリ', 'c.openPortal': 'アプリ一覧を開く', 'c.fullscreen': '全画面表示',
+
+    'tb.open': '開く',
+    'tb.resume': '作業を再開',
+    'tb.resumeTitle': '前回の保存フォルダにある session.json を読み込み、キャリブレーションとクリック点を復元して続きから作業します',
+    'tb.save': '保存',
+    'tb.mode': 'モード',
+    'tb.diameter': '点の直径',
+    'tb.diameterTitle': '点の直径（画面上のピクセル）。[ で細く、] で太く',
+    'tb.diameterKeys': '[ で細く、] で太く',
+    'tb.help': 'ヘルプ (h)',
+
+    'nav.step': '送り幅',
+    'nav.stepTitle': '◀ ▶ 1回で進むフレーム数。, で減らし . で増やす',
+    'nav.stepKeys': ', で減らし . で増やす',
+    'nav.jump': 'ジャンプ (j)',
+    'nav.view': '表示',
+    'nav.zoomOut': '縮小（- キー）',
+    'nav.zoomIn': '拡大（+ キー）',
+    'nav.fit': '全体',
+    'nav.fitTitle': '全体表示に戻す（0 キー）',
+    'nav.gestures': 'ピンチ/Ctrl+ホイール=拡大縮小、2本指スクロール=移動',
+    'nav.seekTitle': 'ドラッグまたはクリックで任意のフレームへ移動',
+    'nav.pointCount': 'このフレーム {here} 点 / 全体 {total} 点',
+    'placeholder': '動画または画像ファイルを開いてください（ドラッグ＆ドロップも可）',
+    'fps.detected': '(自動検出)',
+    'fps.manual': '(手動)',
+
+    'set.diameter': '点の直径（px）',
+    'set.pointColor': 'クリック点の色',
+    'set.calibColor': 'キャリブレーション点の色',
+    'set.framePngs': 'フレームごとの PNG',
+    'set.framePngsNote': 'plot / overlay を書き出す。画像は既定でオン、動画は枚数が膨らむため既定でオフ',
+    'set.indexAuto': '点の番号を点と同じ色にする',
+    'set.indexColor': '点の番号の色',
+    'set.indexColorNote': '上のチェックを外したとき',
+    'set.markerEdge': '点に白い縁取りをつける',
+    'set.markerEdgeNote': '太さは点の大きさに連動',
+    'set.smooth': 'プロットの線を滑らかな曲線にする',
+    'set.showIndex': '点の番号を表示する',
+    'set.equalAspect': 'プロットの縦横比を 1:1 に固定する',
+    'set.equalAspectNote': '長さの計測など、x と y が同じ量のとき',
+
+    'dlg.cancel': 'キャンセル',
+    'dlg.ok': 'OK',
+    'dlg.okEnter': 'OK（Enter）',
+    'dlg.confirmTitle': '確認',
+    'dlg.messageTitle': 'お知らせ',
+    'calib.title': 'キャリブレーション {n}点目の実世界座標',
+    'calib.pixel': 'クリック位置（画素）: x = {x}, y = {y}',
+    'calib.lead': 'この点の<b>実際の座標</b>を入力してください。単位は任意（mm でも m でも図面上の値でも可）。',
+    'calib.note1': 'この後もう1点クリックします。2点で座標系が決まります。',
+    'calib.note2': '1点目と x も y も異なる点であること。同じだとその軸の倍率を決められません。',
+    'calib.sameImgX': '2点の画像 X 座標が同じです。scaleX = 1 を使用します。',
+    'calib.sameImgY': '2点の画像 Y 座標が同じです。scaleY = 1 を使用します。',
+    'calib.zeroScaleX': 'scaleX が 0 です。2点の実世界 X 座標が同じではありませんか。',
+    'calib.zeroScaleY': 'scaleY が 0 です。2点の実世界 Y 座標が同じではありませんか。',
+    'jump.title': 'フレームへ移動',
+    'jump.label': 'フレーム番号',
+    'jump.range': '1 から {max} の範囲で指定してください。',
+    'jump.go': '移動（Enter）',
+
+    'guide.open': '動画または画像ファイルを開いてください',
+    'guide.openSub': '左上の「開く」ボタン、またはこの画面にドラッグ＆ドロップ（画像は複数選択可）',
+    'guide.nav': ' / ← → でフレーム移動',
+    'guide.calibInput': '{n}点目の実世界座標を入力してください',
+    'guide.calibInputSub': 'いま画面に出ているダイアログに、その点の実際の x と y を入れて OK。間違えたらキャンセルして打ち直せます',
+    'guide.calib1': '実世界の座標が分かっている点を、画像上でクリック（1点目）',
+    'guide.calib1Redo': '記録済みの点は消えません。新しい2点が確定するまで今のキャリブレーションが有効で、確定後に全点の実世界座標を計算し直します',
+    'guide.calib1Sub': 'クリックすると座標を入力する画面が出ます。例: グラフの原点、定規の目盛り、既知の長さの端点など',
+    'guide.calib2': '2点目をクリック（1点目と x も y も異なる点）',
+    'guide.calib2Redo': '中断したい場合は a キーで Add に戻れば、今のキャリブレーションがそのまま残ります',
+    'guide.calib2Sub': '例: 1点目が原点なら、x 軸と y 軸のどちらの目盛りも違う点を選ぶ',
+    'guide.del': '消したい点の近くをクリックすると、いちばん近い点が削除されます',
+    'guide.delSub': '点の追加に戻るには a キー（または Add ボタン）{nav}',
+    'guide.warnStep': '注意',
+    'guide.noCalib': 'キャリブレーションが未完了です。このまま打つと実世界座標は NaN になります',
+    'guide.noCalibSub': 'c キー（または Calibration ボタン）でやり直せます',
+    'guide.add': '記録したい位置をクリックして点を追加',
+    'guide.addSub0': '間違えたら d キーで削除モード{nav}',
+    'guide.addSubN': '{n} 点を記録済み。終わったら「保存」(Ctrl+S) で出力フォルダを選ぶ{nav}',
+    'guide.modeStep': 'モード',
+    'guide.mode': 'モードを選んでください',
+
+    'status.ready': 'ready',
+    'status.loading': '読み込み中...',
+    'status.loadFailed': '読み込みに失敗しました',
+    'status.calib1': 'Calibration: 1点目をクリック',
+    'status.calib2': 'Calibration: 2点目をクリック',
+    'status.calibInput': 'Calibration: {n}点目の実世界座標を入力',
+    'status.add': 'Add: クリックで点を追加',
+    'status.del': 'Delete: 消したい点の近くをクリック',
+    'status.rendering': '画像を生成中... ({k} / {n})',
+    'status.writing': '書き出し中... ({k} / {n}) {name}',
+    'status.saved': '保存が完了しました',
+    'status.saveFailed': '保存に失敗しました',
+
+    'pick.desc': '動画または画像',
+    'confirm.discardText': '保存していないクリック点があります。破棄して新しいファイルを開きますか？',
+    'confirm.discardTitle': '未保存の点があります',
+    'confirm.discardOk': '破棄して開く',
+    'confirm.noCalibText': 'キャリブレーションがまだです。実世界座標は全て NaN になりますが、保存しますか？',
+    'confirm.noCalibTitle': 'キャリブレーション未実施',
+    'confirm.noPointsText': 'クリック点が1つもありません。それでも保存しますか？',
+    'confirm.noPointsTitle': '点がありません',
+    'confirm.saveAnyway': 'このまま保存',
+    'confirm.manyPngsText': '{n} フレーム分の PNG（plot と overlay）を書き出します。{m} 枚になり時間がかかります。続けますか？',
+    'confirm.manyPngsTitle': 'フレームごとの PNG',
+    'confirm.write': '書き出す',
+    'confirm.stop': 'やめる',
+    'confirm.fpsText': 'fps を変えるとフレーム数が変わり、記録済みの点はクリアされます。続けますか？',
+    'confirm.fpsTitle': 'fps の変更',
+    'confirm.fpsOk': '変更する',
+
+    'log.welcome': 'Click to Get Coord v{v} — 「開く」または画面へのドラッグ＆ドロップで動画・画像を読み込んでください。',
+    'log.multiVideo': '動画が複数選択されました。先頭の {name} のみ開きます。',
+    'log.loaded': '読み込み完了: {name} — {n} フレーム, {w}x{h} px',
+    'log.videoPngsOff': '動画のため、フレームごとの PNG（plot / overlay）の書き出しは既定でオフです。設定（⚙ / e）でオンにできます。',
+    'log.recalib': 'Calibration をやり直します。新しい2点が確定するまで今のキャリブレーションは有効なままで、記録済みの {n} 点も消えません（確定時に実世界座標を計算し直します）。',
+    'log.calibStart': 'Calibration モード: 実世界座標が既知の2点をクリックしてください（x も y も異なる2点）。',
+    'log.recalibAborted': 'キャリブレーションのやり直しを中断しました。前のキャリブレーションをそのまま使います。',
+    'log.calibAborted': 'キャリブレーションを中断しました。',
+    'log.chooseMode': 'モードを選んでからクリックしてください。',
+    'log.calibCancelled': 'キャリブレーション {n} 点目の入力をキャンセルしました。もう一度クリックしてください。',
+    'log.calibPoint': 'キャリブレーション {n} 点目: 画素 ({px}, {py}) -> 実世界 ({rx}, {ry})',
+    'log.calibDone': 'キャリブレーション完了: scale_x = {sx}, scale_y = {sy} （実世界単位/px）',
+    'log.calibUpdated': 'キャリブレーションを更新: scale_x = {sx}, scale_y = {sy} （実世界単位/px）',
+    'log.recomputed': '記録済みの {n} 点の実世界座標を、この変換で計算し直しました。',
+    'log.added': '[frame {f} / 点 {n}] 画素 ({px}, {py}) -> 実世界 ({rx}, {ry})',
+    'log.addedNaN': '[frame {f} / 点 {n}] 画素 ({px}, {py}) — 未キャリブレーションのため実世界座標は NaN',
+    'log.nothingToDelete': 'このフレームには削除できる点がありません。',
+    'log.deleted': '[frame {f}] 点 {i} を削除: 画素 ({px}, {py})',
+    'log.step': '送り幅を {n} フレームにしました。',
+    'log.saveStopped': '保存を中止しました。設定（⚙ / e）でフレームごとの PNG をオフにできます。',
+    'log.dirFailed': 'フォルダを開けませんでした: {msg}',
+    'log.noDirPicker': 'このブラウザはフォルダ選択（File System Access API）に対応していません。ファイルを個別にダウンロードします。Chrome / Edge ならフォルダに直接保存できます。',
+    'log.pngsSkipped': 'フレームごとの PNG は書き出しません（対象 {n} フレーム）。設定（⚙ / e）の「フレームごとの PNG」でオンにできます。',
+    'log.saved': '保存しました: {n} ファイル（{f} フレーム分の PNG を含む）',
+    'log.downloaded': '{n} ファイルをダウンロードしました。',
+    'log.saveFailed': '保存に失敗しました: {msg}',
+    'log.notSession': 'click-to-get-coord の session.json ではありません。',
+    'log.sessionNameDiff': '警告: セッションの入力データ名 "{a}" が、いま開いているデータ "{b}" と異なります。',
+    'log.sessionFramesDiff': '警告: セッションのフレーム数 {a} が現在の {b} と異なります。重なる範囲だけ復元します。',
+    'log.sessionRestored': 'セッションを復元しました: {n} 点',
+    'log.sessionFailed': 'セッションを読み込めませんでした: {msg}',
+    'log.fpsChanged': 'fps を {v} に変更しました（{n} フレーム）。記録済みの点はクリアされました。',
+
+    'src.videoFailed': '動画を読み込めませんでした: {name}',
+    'src.noDuration': '警告: この動画の長さを取得できませんでした。フレーム送りができない可能性があります。',
+    'src.detectingFps': 'フレームレートを検出中...',
+    'src.fpsUnknown': 'フレームレートを自動検出できませんでした（このブラウザは requestVideoFrameCallback 非対応）。30 fps と仮定します。ツールバーで変更できます。',
+    'src.fpsDetected': 'フレームレート検出: {fps} fps',
+    'src.imageFailed': '画像を読み込めませんでした: {name}',
+    'src.sizeMismatch': '警告: 画像のサイズが揃っていません（{sizes}）。キャリブレーションは全画像で共通に適用されるため、拡大率が異なる画像では実世界座標がずれます。',
+
+    'help.body': `<h2>使い方</h2>
+<ol>
+  <li><b>開く</b>（Ctrl+O）で動画ファイル、または画像ファイル（複数可）を選ぶ。</li>
+  <li>自動的に <b>Calibration モード</b>に入る。画像上の2点をクリックし、それぞれの実世界座標を
+    入力する。<b>x も y も異なる2点</b>を選ぶこと。</li>
+  <li>2点入力すると自動的に <b>Add モード</b>に入る。クリックで点を記録する。</li>
+  <li>消したい点があれば <b>Delete モード</b>（d）でその点の近くをクリックする。</li>
+  <li><b>保存</b>（Ctrl+S）で出力先フォルダを選ぶと、そのフォルダに全ファイルが書き出される。</li>
+</ol>
+
+<h3>フレームの移動（動画・複数画像）</h3>
+<ul>
+  <li>画面上部の<b>シークバー</b>をドラッグ、またはクリックで任意のフレームへ飛べます。</li>
+  <li><b>◀ ▶</b>（← → / z x）は<b>送り幅</b>のフレーム数だけ進みます。既定は1フレームで、
+    ツールバーの数値欄か <b>, </b>／<b>.</b> キーで 1, 2, 5, 10, 20, 50, 100, 200, 500 と切り替わります。</li>
+  <li><b>j</b> でフレーム番号を直接指定できます。</li>
+</ul>
+
+<h3>キャリブレーションのやり直し</h3>
+<p>点を打っている途中でも <b>c</b> キー（または Calibration ボタン）でやり直せます。</p>
+<ul>
+  <li>記録済みのクリック点は<b>消えません</b>。新しい2点が確定した時点で、全点の実世界座標が
+    新しい変換で計算し直されます（画素座標を保持しているため）。</li>
+  <li>新しい2点が確定するまで、<b>今のキャリブレーションは有効なまま</b>です。1点だけ入れて
+    やめても、前の設定は失われません（a キーで Add に戻れば中断できます）。</li>
+  <li>やり直し中は、前のキャリブレーション点が薄く、新しい点が濃く表示されます。</li>
+</ul>
+
+<h3>拡大・移動</h3>
+<table>
+  <tr><td>トラックパッドでピンチ</td><td>拡大・縮小（カーソル位置を中心に）</td></tr>
+  <tr><td>Ctrl/Cmd + ホイール</td><td>同上（マウスの場合）</td></tr>
+  <tr><td>2本指スクロール</td><td>表示位置の移動（パン）</td></tr>
+  <tr><td>ホイール / Shift+ホイール</td><td>上下 / 左右に移動（マウスの場合）</td></tr>
+  <tr><td>+ / -</td><td>拡大 / 縮小</td></tr>
+  <tr><td>0</td><td>全体表示に戻す</td></tr>
+</table>
+<p class="hint">3本指スクロールは macOS 自身が使うため、ブラウザには届きません。</p>
+
+<h3>ショートカット</h3>
+<table>
+  <tr><td>Ctrl+O</td><td>ファイルを開く</td></tr>
+  <tr><td>Ctrl+S</td><td>保存</td></tr>
+  <tr><td>c / a / d</td><td>Calibration / Add / Delete モード</td></tr>
+  <tr><td>→ または x</td><td>次のフレーム</td></tr>
+  <tr><td>← または z</td><td>前のフレーム</td></tr>
+  <tr><td>j</td><td>フレーム番号を指定して移動</td></tr>
+  <tr><td>, / .</td><td>送り幅（◀ ▶ 1回で進むフレーム数）を減らす / 増やす</td></tr>
+  <tr><td>[ / ]</td><td>点の直径を小さく / 大きく</td></tr>
+  <tr><td>e</td><td>設定（⚙ と同じ。変更はその場で反映）</td></tr>
+  <tr><td>h</td><td>このヘルプ</td></tr>
+  <tr><td>Esc</td><td>設定・QR コード・更新履歴を閉じる</td></tr>
+</table>
+
+<h3>「作業を再開」とは</h3>
+<p>保存すると、出力フォルダに <code>session.json</code>（キャリブレーションの2点と変換係数、
+  フレームごとのクリック点）が書き出されます。<b>作業を再開</b>はこれを読み戻す機能です。</p>
+<ol>
+  <li>前回と<b>同じ動画・画像</b>を「開く」で読み込む（画像そのものは session.json に入っていません）</li>
+  <li><b>作業を再開</b>を押して、前回の <code>session.json</code> を選ぶ</li>
+  <li>キャリブレーションと打った点が全部戻るので、続きから追加・削除できる</li>
+</ol>
+<p class="hint">用途: 途中で中断したとき、点を打ち足したいとき、キャリブレーションだけやり直したいとき。</p>
+
+<h3>保存されるもの</h3>
+<ul>
+  <li><code>coords.mat</code> — MATLAB / scipy で読めるバイナリ（<code>coords_raw</code>, <code>coords_real</code> ほか）</li>
+  <li><code>coords.csv</code> — 全点を1ファイルにまとめたテキスト</li>
+  <li><code>plot_frame_XXXX.png</code> — 実世界座標系でのクリック点と、それを結ぶ曲線</li>
+  <li><code>overlay_frame_XXXX.png</code> — 元画像にクリック点を重ねた検証用画像</li>
+  <li><code>session.json</code> — 作業再開用の状態</li>
+  <li><code>README.md</code> — 上記すべての読み方の説明（Markdown）</li>
+</ul>
+<p class="hint">フレームごとの PNG は、<b>画像入力では既定でオン、動画では既定でオフ</b>です
+  （動画は対象フレームが大量になりうるため）。設定（⚙ / e）で切り替えられます。数値データは
+  <code>coords.mat</code> / <code>coords.csv</code> に全て入っているので、図は後から作り直せます。
+  書き出すファイルの中身は、画面の言語にかかわらず同じです。</p>`,
+  },
+  en: {
+    'c.settings': 'Settings', 'c.close': 'Close', 'c.language': 'Language', 'c.share': 'Share',
+    'c.showQr': 'Show QR codes', 'c.changelog': 'Changelog', 'c.showChangelog': 'Show',
+    'c.otherApps': 'Other apps', 'c.openPortal': 'Open app list', 'c.fullscreen': 'Full screen',
+
+    'tb.open': 'Open',
+    'tb.resume': 'Resume',
+    'tb.resumeTitle': 'Load session.json from a previous output folder, restore the calibration and the clicked points, and carry on where you left off',
+    'tb.save': 'Save',
+    'tb.mode': 'Mode',
+    'tb.diameter': 'Point size',
+    'tb.diameterTitle': 'Point diameter (screen pixels). [ smaller, ] larger',
+    'tb.diameterKeys': '[ smaller, ] larger',
+    'tb.help': 'Help (h)',
+
+    'nav.step': 'Step',
+    'nav.stepTitle': 'Frames moved by one press of ◀ ▶. , for fewer, . for more',
+    'nav.stepKeys': ', for fewer, . for more',
+    'nav.jump': 'Jump (j)',
+    'nav.view': 'View',
+    'nav.zoomOut': 'Zoom out (- key)',
+    'nav.zoomIn': 'Zoom in (+ key)',
+    'nav.fit': 'Fit',
+    'nav.fitTitle': 'Show the whole frame (0 key)',
+    'nav.gestures': 'Pinch / Ctrl+wheel = zoom, two-finger scroll = pan',
+    'nav.seekTitle': 'Drag or click to go to any frame',
+    'nav.pointCount': 'This frame: {here} points / total: {total}',
+    'placeholder': 'Open a video or image files (drag and drop works too)',
+    'fps.detected': '(detected)',
+    'fps.manual': '(manual)',
+
+    'set.diameter': 'Point size (px)',
+    'set.pointColor': 'Point colour',
+    'set.calibColor': 'Calibration point colour',
+    'set.framePngs': 'Per-frame PNGs',
+    'set.framePngsNote': 'Write plot / overlay images. On by default for images, off for video (too many files)',
+    'set.indexAuto': 'Point numbers in the point colour',
+    'set.indexColor': 'Point number colour',
+    'set.indexColorNote': 'Used when the option above is off',
+    'set.markerEdge': 'White outline on points',
+    'set.markerEdgeNote': 'Its thickness follows the point size',
+    'set.smooth': 'Smooth curve in the plot',
+    'set.showIndex': 'Show point numbers',
+    'set.equalAspect': 'Lock the plot aspect ratio to 1:1',
+    'set.equalAspectNote': 'When x and y are the same quantity, e.g. measuring lengths',
+
+    'dlg.cancel': 'Cancel',
+    'dlg.ok': 'OK',
+    'dlg.okEnter': 'OK (Enter)',
+    'dlg.confirmTitle': 'Confirm',
+    'dlg.messageTitle': 'Notice',
+    'calib.title': 'Calibration point {n}: real-world coordinates',
+    'calib.pixel': 'Clicked position (pixels): x = {x}, y = {y}',
+    'calib.lead': 'Enter the <b>real-world coordinates</b> of this point. Any unit works (mm, m, or values read off a drawing).',
+    'calib.note1': 'You will click one more point next. Two points define the coordinate system.',
+    'calib.note2': 'It must differ from point 1 in both x and y; otherwise that axis\'s scale cannot be determined.',
+    'calib.sameImgX': 'The two points have the same image X. Using scaleX = 1.',
+    'calib.sameImgY': 'The two points have the same image Y. Using scaleY = 1.',
+    'calib.zeroScaleX': 'scaleX is 0. Do the two points have the same real-world X?',
+    'calib.zeroScaleY': 'scaleY is 0. Do the two points have the same real-world Y?',
+    'jump.title': 'Go to frame',
+    'jump.label': 'Frame number',
+    'jump.range': 'Enter a number from 1 to {max}.',
+    'jump.go': 'Go (Enter)',
+
+    'guide.open': 'Open a video or image files',
+    'guide.openSub': 'Use the "Open" button at the top left, or drag and drop onto this page (several images at once are fine)',
+    'guide.nav': ' / ← → to change frames',
+    'guide.calibInput': 'Enter the real-world coordinates of point {n}',
+    'guide.calibInputSub': 'Type the point\'s real x and y into the dialog on screen and press OK. Clicked the wrong spot? Cancel and click again',
+    'guide.calib1': 'Click a point whose real-world coordinates you know (point 1)',
+    'guide.calib1Redo': 'Recorded points are kept. The current calibration stays in force until two new points are confirmed; then every real-world coordinate is recomputed',
+    'guide.calib1Sub': 'Clicking asks for its coordinates. For example: a graph\'s origin, a ruler mark, or an end of a known length',
+    'guide.calib2': 'Click point 2 (different from point 1 in both x and y)',
+    'guide.calib2Redo': 'To give up, press a to go back to Add; the current calibration stays as it is',
+    'guide.calib2Sub': 'For example, if point 1 is the origin, pick a point off both the x and the y axis',
+    'guide.del': 'Click near a point to delete the nearest one',
+    'guide.delSub': 'Press a (or the Add button) to go back to adding points{nav}',
+    'guide.warnStep': 'NOTE',
+    'guide.noCalib': 'Calibration is not finished. Points added now get NaN real-world coordinates',
+    'guide.noCalibSub': 'Press c (or the Calibration button) to calibrate',
+    'guide.add': 'Click where you want to record a point',
+    'guide.addSub0': 'Made a mistake? Press d for Delete mode{nav}',
+    'guide.addSubN': '{n} points recorded. When done, press "Save" (Ctrl+S) and pick an output folder{nav}',
+    'guide.modeStep': 'MODE',
+    'guide.mode': 'Choose a mode',
+
+    'status.ready': 'ready',
+    'status.loading': 'Loading...',
+    'status.loadFailed': 'Loading failed',
+    'status.calib1': 'Calibration: click point 1',
+    'status.calib2': 'Calibration: click point 2',
+    'status.calibInput': 'Calibration: enter the real-world coordinates of point {n}',
+    'status.add': 'Add: click to add a point',
+    'status.del': 'Delete: click near the point to remove',
+    'status.rendering': 'Rendering images... ({k} / {n})',
+    'status.writing': 'Writing... ({k} / {n}) {name}',
+    'status.saved': 'Saved',
+    'status.saveFailed': 'Saving failed',
+
+    'pick.desc': 'Video or images',
+    'confirm.discardText': 'There are unsaved points. Discard them and open the new files?',
+    'confirm.discardTitle': 'Unsaved points',
+    'confirm.discardOk': 'Discard and open',
+    'confirm.noCalibText': 'Not calibrated yet, so every real-world coordinate will be NaN. Save anyway?',
+    'confirm.noCalibTitle': 'Not calibrated',
+    'confirm.noPointsText': 'There are no clicked points. Save anyway?',
+    'confirm.noPointsTitle': 'No points',
+    'confirm.saveAnyway': 'Save anyway',
+    'confirm.manyPngsText': 'This writes PNGs (plot and overlay) for {n} frames: {m} files, which takes a while. Continue?',
+    'confirm.manyPngsTitle': 'Per-frame PNGs',
+    'confirm.write': 'Write them',
+    'confirm.stop': 'Stop',
+    'confirm.fpsText': 'Changing the fps changes the frame count and clears the recorded points. Continue?',
+    'confirm.fpsTitle': 'Change fps',
+    'confirm.fpsOk': 'Change',
+
+    'log.welcome': 'Click to Get Coord v{v} — load a video or images with "Open" or by dropping them onto the page.',
+    'log.multiVideo': 'Several videos were selected. Only the first one, {name}, is opened.',
+    'log.loaded': 'Loaded: {name} — {n} frames, {w}x{h} px',
+    'log.videoPngsOff': 'This is a video, so per-frame PNGs (plot / overlay) are off by default. Turn them on in the settings (⚙ / e).',
+    'log.recalib': 'Redoing the calibration. The current one stays in force until two new points are confirmed, and the {n} recorded points are kept (their real-world coordinates are recomputed then).',
+    'log.calibStart': 'Calibration mode: click two points with known real-world coordinates (different in both x and y).',
+    'log.recalibAborted': 'Re-calibration abandoned. The previous calibration is kept.',
+    'log.calibAborted': 'Calibration abandoned.',
+    'log.chooseMode': 'Choose a mode before clicking.',
+    'log.calibCancelled': 'Calibration point {n} was cancelled. Click again.',
+    'log.calibPoint': 'Calibration point {n}: pixel ({px}, {py}) -> real ({rx}, {ry})',
+    'log.calibDone': 'Calibration done: scale_x = {sx}, scale_y = {sy} (real-world units/px)',
+    'log.calibUpdated': 'Calibration updated: scale_x = {sx}, scale_y = {sy} (real-world units/px)',
+    'log.recomputed': 'Recomputed the real-world coordinates of the {n} recorded points with this transform.',
+    'log.added': '[frame {f} / point {n}] pixel ({px}, {py}) -> real ({rx}, {ry})',
+    'log.addedNaN': '[frame {f} / point {n}] pixel ({px}, {py}) — not calibrated, so the real-world coordinates are NaN',
+    'log.nothingToDelete': 'There is no point to delete in this frame.',
+    'log.deleted': '[frame {f}] deleted point {i}: pixel ({px}, {py})',
+    'log.step': 'Frame step set to {n}.',
+    'log.saveStopped': 'Save cancelled. Per-frame PNGs can be turned off in the settings (⚙ / e).',
+    'log.dirFailed': 'Could not open the folder: {msg}',
+    'log.noDirPicker': 'This browser cannot pick a folder (File System Access API), so the files are downloaded one by one. Chrome / Edge can save straight into a folder.',
+    'log.pngsSkipped': 'Per-frame PNGs are not written ({n} frames with points). Turn on "Per-frame PNGs" in the settings (⚙ / e).',
+    'log.saved': 'Saved {n} files (including PNGs for {f} frames)',
+    'log.downloaded': 'Downloaded {n} files.',
+    'log.saveFailed': 'Saving failed: {msg}',
+    'log.notSession': 'This is not a click-to-get-coord session.json.',
+    'log.sessionNameDiff': 'Warning: the session\'s input "{a}" differs from the open data "{b}".',
+    'log.sessionFramesDiff': 'Warning: the session has {a} frames but the open data has {b}. Only the overlapping range is restored.',
+    'log.sessionRestored': 'Session restored: {n} points',
+    'log.sessionFailed': 'Could not load the session: {msg}',
+    'log.fpsChanged': 'fps changed to {v} ({n} frames). The recorded points were cleared.',
+
+    'src.videoFailed': 'Could not load the video: {name}',
+    'src.noDuration': 'Warning: could not read the length of this video. Frame stepping may not work.',
+    'src.detectingFps': 'Detecting the frame rate...',
+    'src.fpsUnknown': 'Could not detect the frame rate (this browser lacks requestVideoFrameCallback). Assuming 30 fps; you can change it in the toolbar.',
+    'src.fpsDetected': 'Frame rate detected: {fps} fps',
+    'src.imageFailed': 'Could not load the image: {name}',
+    'src.sizeMismatch': 'Warning: the images differ in size ({sizes}). One calibration applies to all of them, so images at a different scale get wrong real-world coordinates.',
+
+    'help.body': `<h2>How to use</h2>
+<ol>
+  <li><b>Open</b> (Ctrl+O) a video file, or one or more image files.</li>
+  <li><b>Calibration mode</b> starts automatically. Click two points on the image and enter the
+    real-world coordinates of each. Pick <b>two points that differ in both x and y</b>.</li>
+  <li>After the second point, <b>Add mode</b> starts automatically. Click to record points.</li>
+  <li>To remove a point, switch to <b>Delete mode</b> (d) and click near it.</li>
+  <li><b>Save</b> (Ctrl+S) and pick an output folder; every file is written into it.</li>
+</ol>
+
+<h3>Moving between frames (video, several images)</h3>
+<ul>
+  <li>Drag the <b>seek bar</b> at the top, or click on it, to jump to any frame.</li>
+  <li><b>◀ ▶</b> (← → / z x) move by the <b>frame step</b>. It starts at 1 and steps through
+    1, 2, 5, 10, 20, 50, 100, 200, 500 with the toolbar box or the <b>, </b>/<b>.</b> keys.</li>
+  <li><b>j</b> jumps to a frame number.</li>
+</ul>
+
+<h3>Redoing the calibration</h3>
+<p>Press <b>c</b> (or the Calibration button) at any time, even with points already recorded.</p>
+<ul>
+  <li>Recorded points are <b>kept</b>. Once the two new points are confirmed, every real-world
+    coordinate is recomputed with the new transform (the pixel coordinates are what is stored).</li>
+  <li>Until then, <b>the current calibration stays in force</b>. Entering one point and giving up
+    loses nothing (press a to go back to Add).</li>
+  <li>While redoing, the old calibration points are drawn faint and the new ones solid.</li>
+</ul>
+
+<h3>Zoom and pan</h3>
+<table>
+  <tr><td>Trackpad pinch</td><td>Zoom in / out about the cursor</td></tr>
+  <tr><td>Ctrl/Cmd + wheel</td><td>The same, with a mouse</td></tr>
+  <tr><td>Two-finger scroll</td><td>Pan</td></tr>
+  <tr><td>Wheel / Shift+wheel</td><td>Pan vertically / horizontally (mouse)</td></tr>
+  <tr><td>+ / -</td><td>Zoom in / out</td></tr>
+  <tr><td>0</td><td>Fit the whole frame again</td></tr>
+</table>
+<p class="hint">Three-finger scroll is taken by macOS itself and never reaches the browser.</p>
+
+<h3>Keyboard shortcuts</h3>
+<table>
+  <tr><td>Ctrl+O</td><td>Open files</td></tr>
+  <tr><td>Ctrl+S</td><td>Save</td></tr>
+  <tr><td>c / a / d</td><td>Calibration / Add / Delete mode</td></tr>
+  <tr><td>→ or x</td><td>Next frame</td></tr>
+  <tr><td>← or z</td><td>Previous frame</td></tr>
+  <tr><td>j</td><td>Jump to a frame number</td></tr>
+  <tr><td>, / .</td><td>Smaller / larger frame step (frames per press of ◀ ▶)</td></tr>
+  <tr><td>[ / ]</td><td>Smaller / larger points</td></tr>
+  <tr><td>e</td><td>Settings (same as ⚙; changes apply immediately)</td></tr>
+  <tr><td>h</td><td>This help</td></tr>
+  <tr><td>Esc</td><td>Close the settings, QR codes or changelog</td></tr>
+</table>
+
+<h3>What "Resume" does</h3>
+<p>Saving writes <code>session.json</code> into the output folder (the two calibration points,
+  the transform, and the clicked points of every frame). <b>Resume</b> reads it back.</p>
+<ol>
+  <li><b>Open</b> the <b>same video or images</b> as before (the images themselves are not in session.json)</li>
+  <li>Press <b>Resume</b> and pick the earlier <code>session.json</code></li>
+  <li>The calibration and every point come back, so you can carry on adding or deleting</li>
+</ol>
+<p class="hint">Useful when you were interrupted, want to add more points, or only want to redo the calibration.</p>
+
+<h3>What is saved</h3>
+<ul>
+  <li><code>coords.mat</code> — binary readable by MATLAB / scipy (<code>coords_raw</code>, <code>coords_real</code> and more)</li>
+  <li><code>coords.csv</code> — every point in one text file</li>
+  <li><code>plot_frame_XXXX.png</code> — the clicked points in real-world coordinates, joined by a curve</li>
+  <li><code>overlay_frame_XXXX.png</code> — the source image with the clicked points drawn on it, for checking</li>
+  <li><code>session.json</code> — the state for resuming</li>
+  <li><code>README.md</code> — how to read all of the above (Markdown)</li>
+</ul>
+<p class="hint">Per-frame PNGs are <b>on by default for images and off for video</b> (a video can
+  have a great many annotated frames). Switch them in the settings (⚙ / e). All the numbers are in
+  <code>coords.mat</code> / <code>coords.csv</code>, so the figures can be redrawn later. The exported
+  files are the same whatever the UI language (the README and CSV stay in their fixed format).</p>`,
+  },
+};
+
+/**
+ * UI text in the current language.
+ * @param {string} key
+ * @param {Record<string, string|number>} [params]
+ * @returns {string}
+ */
+function t(key, params) {
+  return /** @type {any} */ (window).I18N.t(key, params);
+}
 
 /**
  * @typedef {{x: number, y: number}} Pt
@@ -35,10 +558,24 @@ const els = {
   log: /** @type {HTMLElement} */ (document.getElementById('log')),
   logbox: /** @type {HTMLElement} */ (document.getElementById('logbox')),
   status: /** @type {HTMLElement} */ (document.getElementById('status')),
-  settings: /** @type {HTMLDialogElement} */ (document.getElementById('dlg-settings')),
   help: /** @type {HTMLDialogElement} */ (document.getElementById('dlg-help')),
-  btnSettings: /** @type {HTMLButtonElement} */ (document.getElementById('btn-settings')),
   btnHelp: /** @type {HTMLButtonElement} */ (document.getElementById('btn-help')),
+  appVersion: /** @type {HTMLElement} */ (document.getElementById('app-version')),
+  fullscreenBtn: /** @type {HTMLButtonElement} */ (document.getElementById('fullscreen-btn')),
+  settingsBtn: /** @type {HTMLButtonElement} */ (document.getElementById('settings-btn')),
+  settingsPanel: /** @type {HTMLElement} */ (document.getElementById('settings-panel')),
+  settingsClose: /** @type {HTMLButtonElement} */ (document.getElementById('settings-close')),
+  backdrop: /** @type {HTMLElement} */ (document.getElementById('sheet-backdrop')),
+  langSelect: /** @type {HTMLSelectElement} */ (document.getElementById('lang-select')),
+  qrBtn: /** @type {HTMLButtonElement} */ (document.getElementById('qrBtn')),
+  qrOverlay: /** @type {HTMLElement} */ (document.getElementById('qrOverlay')),
+  qrClose: /** @type {HTMLButtonElement} */ (document.getElementById('qrClose')),
+  qrUrl: /** @type {HTMLElement} */ (document.getElementById('qrUrl')),
+  qrSrcUrl: /** @type {HTMLElement} */ (document.getElementById('qrSrcUrl')),
+  changelogBtn: /** @type {HTMLButtonElement} */ (document.getElementById('changelogBtn')),
+  changelogOverlay: /** @type {HTMLElement} */ (document.getElementById('changelogOverlay')),
+  changelogList: /** @type {HTMLElement} */ (document.getElementById('changelogList')),
+  changelogClose: /** @type {HTMLButtonElement} */ (document.getElementById('changelogClose')),
   modeButtons: /** @type {HTMLButtonElement[]} */ (Array.from(document.querySelectorAll('button.mode'))),
   setDiameter: /** @type {HTMLInputElement} */ (document.getElementById('set-diameter')),
   setEqualAspect: /** @type {HTMLInputElement} */ (document.getElementById('set-equal-aspect')),
@@ -46,7 +583,6 @@ const els = {
   setFramePngs: /** @type {HTMLInputElement} */ (document.getElementById('set-frame-pngs')),
   setIndexAuto: /** @type {HTMLInputElement} */ (document.getElementById('set-index-auto')),
   setIndexColor: /** @type {HTMLInputElement} */ (document.getElementById('set-index-color')),
-  setCancel: /** @type {HTMLButtonElement} */ (document.getElementById('set-cancel')),
   markerSize: /** @type {HTMLInputElement} */ (document.getElementById('marker-size')),
   zoomIn: /** @type {HTMLButtonElement} */ (document.getElementById('btn-zoom-in')),
   zoomOut: /** @type {HTMLButtonElement} */ (document.getElementById('btn-zoom-out')),
@@ -56,7 +592,6 @@ const els = {
   setCalibColor: /** @type {HTMLInputElement} */ (document.getElementById('set-calib-color')),
   setSmooth: /** @type {HTMLInputElement} */ (document.getElementById('set-smooth')),
   setShowIndex: /** @type {HTMLInputElement} */ (document.getElementById('set-show-index')),
-  setOk: /** @type {HTMLButtonElement} */ (document.getElementById('set-ok')),
 
   guide: /** @type {HTMLElement} */ (document.getElementById('guide')),
   guideStep: /** @type {HTMLElement} */ (document.getElementById('guide-step')),
@@ -151,9 +686,16 @@ function log(msg, level = 'info') {
   els.logbox.scrollTop = els.logbox.scrollHeight;
 }
 
-/** @param {string} text */
-function setStatus(text) {
-  els.status.textContent = text;
+/** The status line as a message key, so a language switch can redraw it. */
+let statusMsg = { key: 'status.ready', /** @type {Record<string, string|number>|undefined} */ params: undefined };
+
+/**
+ * @param {string} key STRINGS key
+ * @param {Record<string, string|number>} [params]
+ */
+function setStatus(key, params) {
+  statusMsg = { key, params };
+  els.status.textContent = t(key, params);
 }
 
 /** @param {number} n */
@@ -223,10 +765,10 @@ function openDialog(dialog) {
  * @returns {Promise<boolean>}
  */
 async function showConfirm(text, opts = {}) {
-  els.confirmTitle.textContent = opts.title || '確認';
+  els.confirmTitle.textContent = opts.title || t('dlg.confirmTitle');
   els.confirmText.textContent = text;
-  els.confirmOk.textContent = opts.okLabel || 'OK';
-  els.confirmCancel.textContent = opts.cancelLabel || 'キャンセル';
+  els.confirmOk.textContent = opts.okLabel || t('dlg.ok');
+  els.confirmCancel.textContent = opts.cancelLabel || t('dlg.cancel');
   els.confirmCancel.hidden = false;
   return (await openDialog(els.dlgConfirm)) === 'ok';
 }
@@ -236,10 +778,10 @@ async function showConfirm(text, opts = {}) {
  * @param {string} [title]
  * @returns {Promise<void>}
  */
-async function showMessage(text, title = 'お知らせ') {
+async function showMessage(text, title = t('dlg.messageTitle')) {
   els.confirmTitle.textContent = title;
   els.confirmText.textContent = text;
-  els.confirmOk.textContent = 'OK';
+  els.confirmOk.textContent = t('dlg.ok');
   els.confirmCancel.hidden = true;
   await openDialog(els.dlgConfirm);
   els.confirmCancel.hidden = false;
@@ -253,11 +795,9 @@ async function showMessage(text, title = 'お知らせ') {
  * @returns {Promise<Pt|null>} null when cancelled
  */
 async function askCalibReal(pointNo, pixel, event) {
-  els.calibTitle.textContent = `キャリブレーション ${pointNo}点目の実世界座標`;
-  els.calibPixel.textContent = `クリック位置（画素）: x = ${pixel.x.toFixed(1)}, y = ${pixel.y.toFixed(1)}`;
-  els.calibNote.textContent = pointNo === 1
-    ? 'この後もう1点クリックします。2点で座標系が決まります。'
-    : '1点目と x も y も異なる点であること。同じだとその軸の倍率を決められません。';
+  els.calibTitle.textContent = t('calib.title', { n: pointNo });
+  els.calibPixel.textContent = t('calib.pixel', { x: pixel.x.toFixed(1), y: pixel.y.toFixed(1) });
+  els.calibNote.textContent = t(pointNo === 1 ? 'calib.note1' : 'calib.note2');
   els.calibX.value = '';
   els.calibY.value = '';
   placeDialogAwayFrom(els.dlgCalib, event);
@@ -277,7 +817,7 @@ async function askCalibReal(pointNo, pixel, event) {
 async function askFrameNumber(max, current) {
   els.jumpValue.max = String(max);
   els.jumpValue.value = String(current);
-  els.jumpRange.textContent = `1 から ${max} の範囲で指定してください。`;
+  els.jumpRange.textContent = t('jump.range', { max });
   const result = await openDialog(els.dlgJump);
   if (result !== 'ok') return null;
   const n = Number(els.jumpValue.value);
@@ -301,78 +841,58 @@ function setGuide(g) {
 /** Recompute the guide from the current state. */
 function updateGuide() {
   if (!state.source) {
-    setGuide({
-      step: 'STEP 1',
-      text: '動画または画像ファイルを開いてください',
-      sub: '左上の「開く」ボタン、またはこの画面にドラッグ＆ドロップ（画像は複数選択可）',
-    });
+    setGuide({ step: 'STEP 1', text: t('guide.open'), sub: t('guide.openSub') });
     return;
   }
 
-  const nav = state.source.frameCount > 1 ? ' / ← → でフレーム移動' : '';
+  const nav = state.source.frameCount > 1 ? t('guide.nav') : '';
 
   if (state.mode === 'calib') {
     if (state.awaitingCalibInput) {
       setGuide({
         step: 'STEP 2',
-        text: `${state.awaitingCalibInput}点目の実世界座標を入力してください`,
-        sub: 'いま画面に出ているダイアログに、その点の実際の x と y を入れて OK。間違えたらキャンセルして打ち直せます',
+        text: t('guide.calibInput', { n: state.awaitingCalibInput }),
+        sub: t('guide.calibInputSub'),
       });
       return;
     }
     if (state.pendingCalib.img.length === 0) {
       setGuide({
         step: 'STEP 2',
-        text: '実世界の座標が分かっている点を、画像上でクリック（1点目）',
-        sub: state.transform
-          ? '記録済みの点は消えません。新しい2点が確定するまで今のキャリブレーションが有効で、確定後に全点の実世界座標を計算し直します'
-          : 'クリックすると座標を入力する画面が出ます。例: グラフの原点、定規の目盛り、既知の長さの端点など',
+        text: t('guide.calib1'),
+        sub: t(state.transform ? 'guide.calib1Redo' : 'guide.calib1Sub'),
       });
     } else {
       setGuide({
         step: 'STEP 2',
-        text: '2点目をクリック（1点目と x も y も異なる点）',
-        sub: state.transform
-          ? '中断したい場合は a キーで Add に戻れば、今のキャリブレーションがそのまま残ります'
-          : '例: 1点目が原点なら、x 軸と y 軸のどちらの目盛りも違う点を選ぶ',
+        text: t('guide.calib2'),
+        sub: t(state.transform ? 'guide.calib2Redo' : 'guide.calib2Sub'),
       });
     }
     return;
   }
 
   if (state.mode === 'del') {
-    setGuide({
-      step: 'DELETE',
-      text: '消したい点の近くをクリックすると、いちばん近い点が削除されます',
-      sub: `点の追加に戻るには a キー（または Add ボタン）${nav}`,
-      tone: 'warn',
-    });
+    setGuide({ step: 'DELETE', text: t('guide.del'), sub: t('guide.delSub', { nav }), tone: 'warn' });
     return;
   }
 
   if (state.mode === 'add') {
     if (!state.transform) {
-      setGuide({
-        step: '注意',
-        text: 'キャリブレーションが未完了です。このまま打つと実世界座標は NaN になります',
-        sub: 'c キー（または Calibration ボタン）でやり直せます',
-        tone: 'warn',
-      });
+      setGuide({ step: t('guide.warnStep'), text: t('guide.noCalib'), sub: t('guide.noCalibSub'), tone: 'warn' });
       return;
     }
     const n = totalPoints(state.framesRaw);
     setGuide({
       step: 'STEP 3',
-      text: '記録したい位置をクリックして点を追加',
-      sub: n === 0
-        ? `間違えたら d キーで削除モード${nav}`
-        : `${n} 点を記録済み。終わったら「保存」(Ctrl+S) で出力フォルダを選ぶ${nav}`,
+      text: t('guide.add'),
+      sub: n === 0 ? t('guide.addSub0', { nav }) : t('guide.addSubN', { n, nav }),
       tone: n === 0 ? 'info' : 'done',
     });
     return;
   }
 
-  setGuide({ step: 'モード', text: 'モードを選んでください', sub: 'Calibration (c) / Add (a) / Delete (d)' });
+  setGuide({ step: t('guide.modeStep'), text: t('guide.mode'), sub: 'Calibration (c) / Add (a) / Delete (d)' });
 }
 
 // --- loading -----------------------------------------------------------------
@@ -384,7 +904,7 @@ async function pickFiles() {
       const handles = await anyWin.showOpenFilePicker({
         multiple: true,
         types: [{
-          description: '動画または画像',
+          description: t('pick.desc'),
           accept: {
             'video/*': ['.mp4', '.mov', '.avi', '.mkv', '.m4v', '.webm'],
             'image/*': ['.png', '.jpg', '.jpeg', '.webp', '.bmp', '.gif', '.tif', '.tiff'],
@@ -407,22 +927,22 @@ async function pickFiles() {
 /** @param {File[]} files */
 async function loadFiles(files) {
   if (!files || files.length === 0) return;
-  if (state.dirty && !await showConfirm('保存していないクリック点があります。破棄して新しいファイルを開きますか？',
-    { title: '未保存の点があります', okLabel: '破棄して開く' })) return;
+  if (state.dirty && !await showConfirm(t('confirm.discardText'),
+    { title: t('confirm.discardTitle'), okLabel: t('confirm.discardOk') })) return;
 
   const videos = files.filter((f) => f.type.startsWith('video/') || /\.(mp4|mov|avi|mkv|m4v|webm)$/i.test(f.name));
   const images = files.filter((f) => !videos.includes(f));
 
   try {
     state.busy = true;
-    setStatus('読み込み中...');
+    setStatus('status.loading');
     if (state.source) {
       state.source.dispose();
       state.source = null;
     }
 
     if (videos.length > 0) {
-      if (videos.length > 1) log(`動画が複数選択されました。先頭の ${videos[0].name} のみ開きます。`, 'warn');
+      if (videos.length > 1) log(t('log.multiVideo', { name: videos[0].name }), 'warn');
       state.source = await createVideoSource(videos[0], (m) => log(m));
     } else {
       state.source = await createImageSource(images, (m) => log(m, 'warn'));
@@ -434,15 +954,17 @@ async function loadFiles(files) {
     els.placeholder.style.display = 'none';
     setEnabled(true);
     updateFpsUi();
-    log(`読み込み完了: ${state.source.name} — ${state.source.frameCount} フレーム, ${state.source.width}x${state.source.height} px`);
+    log(t('log.loaded', {
+      name: state.source.name, n: state.source.frameCount, w: state.source.width, h: state.source.height,
+    }));
     if (!state.settings.framePngs) {
-      log('動画のため、フレームごとの PNG（plot / overlay）の書き出しは既定でオフです。設定（e）でオンにできます。');
+      log(t('log.videoPngsOff'));
     }
     enterCalibMode();
     await showFrame(0);
   } catch (err) {
     log(/** @type {Error} */ (err).message, 'err');
-    setStatus('読み込みに失敗しました');
+    setStatus('status.loadFailed');
     // leave the UI in a consistent "nothing loaded" state rather than pointing at a disposed source
     state.source = null;
     state.currentFrame = null;
@@ -507,7 +1029,7 @@ function updateFpsUi() {
   }
   els.fpsGroup.hidden = false;
   els.fpsInput.value = String(s.fps);
-  els.fpsSource.textContent = s.fpsSource === 'detected' ? '(自動検出)' : '(手動)';
+  els.fpsSource.textContent = t(s.fpsSource === 'detected' ? 'fps.detected' : 'fps.manual');
 }
 
 // --- display -----------------------------------------------------------------
@@ -649,10 +1171,10 @@ function updateLabels() {
     els.seek.max = String(Math.max(0, s.frameCount - 1));
     els.seek.value = String(state.frameIndex);
   }
-  const t = state.frameTimes[state.frameIndex];
-  els.frameTime.textContent = t === null || t === undefined ? '' : `t = ${t.toFixed(4)} s`;
+  const time = state.frameTimes[state.frameIndex];
+  els.frameTime.textContent = time === null || time === undefined ? '' : `t = ${time.toFixed(4)} s`;
   const here = (state.framesRaw[state.frameIndex] || []).length;
-  els.pointCount.textContent = `このフレーム ${here} 点 / 全体 ${totalPoints(state.framesRaw)} 点`;
+  els.pointCount.textContent = t('nav.pointCount', { here, total: totalPoints(state.framesRaw) });
   updateGuide();
 }
 
@@ -670,12 +1192,11 @@ function enterCalibMode() {
   state.pendingCalib = { img: [], real: [] };
   const n = totalPoints(state.framesRaw);
   if (state.transform) {
-    log(`Calibration をやり直します。新しい2点が確定するまで今のキャリブレーションは有効なままで、`
-      + `記録済みの ${n} 点も消えません（確定時に実世界座標を計算し直します）。`);
+    log(t('log.recalib', { n }));
   } else {
-    log('Calibration モード: 実世界座標が既知の2点をクリックしてください（x も y も異なる2点）。');
+    log(t('log.calibStart'));
   }
-  setStatus('Calibration: 1点目をクリック');
+  setStatus('status.calib1');
   redraw();
   updateGuide();
 }
@@ -684,15 +1205,13 @@ function enterCalibMode() {
 function discardPendingCalib() {
   if (state.pendingCalib.img.length === 0) return;
   state.pendingCalib = { img: [], real: [] };
-  log(state.transform
-    ? 'キャリブレーションのやり直しを中断しました。前のキャリブレーションをそのまま使います。'
-    : 'キャリブレーションを中断しました。', 'warn');
+  log(t(state.transform ? 'log.recalibAborted' : 'log.calibAborted'), 'warn');
 }
 
 function enterAddMode() {
   discardPendingCalib();
   setMode('add');
-  setStatus('Add: クリックで点を追加');
+  setStatus('status.add');
   redraw();
   updateGuide();
 }
@@ -700,7 +1219,7 @@ function enterAddMode() {
 function enterDelMode() {
   discardPendingCalib();
   setMode('del');
-  setStatus('Delete: 消したい点の近くをクリック');
+  setStatus('status.del');
   redraw();
   updateGuide();
 }
@@ -730,7 +1249,7 @@ async function onCanvasClick(event) {
   if (state.mode === 'calib') await handleCalibClick(p, event);
   else if (state.mode === 'add') handleAddClick(p);
   else if (state.mode === 'del') handleDelClick(p);
-  else log('モードを選んでからクリックしてください。', 'warn');
+  else log(t('log.chooseMode'), 'warn');
 }
 
 /**
@@ -748,7 +1267,7 @@ async function handleCalibClick(p, event) {
   state.busy = true;
   state.awaitingCalibInput = n;
   updateGuide();
-  setStatus(`Calibration: ${n}点目の実世界座標を入力`);
+  setStatus('status.calibInput', { n });
   let real;
   try {
     real = await askCalibReal(n, p, event);
@@ -758,15 +1277,15 @@ async function handleCalibClick(p, event) {
   }
   if (!real) {
     state.pendingCalib.img.pop();
-    log(`キャリブレーション ${n} 点目の入力をキャンセルしました。もう一度クリックしてください。`, 'warn');
+    log(t('log.calibCancelled', { n }), 'warn');
     redraw();
     updateGuide();
     return;
   }
   state.pendingCalib.real.push(real);
   updateGuide();
-  setStatus(state.pendingCalib.img.length >= 2 ? 'Add: クリックで点を追加' : 'Calibration: 2点目をクリック');
-  log(`キャリブレーション ${n} 点目: 画素 (${p.x.toFixed(1)}, ${p.y.toFixed(1)}) -> 実世界 (${real.x}, ${real.y})`);
+  setStatus(state.pendingCalib.img.length >= 2 ? 'status.add' : 'status.calib2');
+  log(t('log.calibPoint', { n, px: p.x.toFixed(1), py: p.y.toFixed(1), rx: real.x, ry: real.y }));
 
   if (state.pendingCalib.img.length >= 2) {
     const { transform, warnings } = computeTransform(
@@ -779,21 +1298,23 @@ async function handleCalibClick(p, event) {
     state.calibImg = state.pendingCalib.img.slice();
     state.calibReal = state.pendingCalib.real.slice();
     state.pendingCalib = { img: [], real: [] };
-    warnings.forEach((w) => log(w, 'warn'));
-    log(`キャリブレーション${replaced ? 'を更新' : '完了'}: scale_x = ${transform.scaleX.toPrecision(6)}, scale_y = ${transform.scaleY.toPrecision(6)} （実世界単位/px）`);
+    // computeTransform returns message keys, not text (calib.js stays language-free)
+    warnings.forEach((w) => log(t(w), 'warn'));
+    log(t(replaced ? 'log.calibUpdated' : 'log.calibDone',
+      { sx: transform.scaleX.toPrecision(6), sy: transform.scaleY.toPrecision(6) }));
     const n2 = totalPoints(state.framesRaw);
     if (n2 > 0) {
       // real-world coordinates are derived from the raw pixels on demand, so every
       // existing point simply follows the new transform
-      log(`記録済みの ${n2} 点の実世界座標を、この変換で計算し直しました。`);
+      log(t('log.recomputed', { n: n2 }));
     }
     state.dirty = true;
     setMode('add');
-    setStatus('Add: クリックで点を追加');
+    setStatus('status.add');
     redraw();
     updateGuide();
   } else {
-    setStatus('Calibration: 2点目をクリック');
+    setStatus('status.calib2');
   }
 }
 
@@ -805,9 +1326,11 @@ function handleAddClick(p) {
   const real = pixelToReal(state.transform, p.x, p.y);
   const n = state.framesRaw[i].length;
   if (state.transform) {
-    log(`[frame ${i + 1} / 点 ${n}] 画素 (${p.x.toFixed(1)}, ${p.y.toFixed(1)}) -> 実世界 (${real.x.toFixed(4)}, ${real.y.toFixed(4)})`);
+    log(t('log.added', {
+      f: i + 1, n, px: p.x.toFixed(1), py: p.y.toFixed(1), rx: real.x.toFixed(4), ry: real.y.toFixed(4),
+    }));
   } else {
-    log(`[frame ${i + 1} / 点 ${n}] 画素 (${p.x.toFixed(1)}, ${p.y.toFixed(1)}) — 未キャリブレーションのため実世界座標は NaN`, 'warn');
+    log(t('log.addedNaN', { f: i + 1, n, px: p.x.toFixed(1), py: p.y.toFixed(1) }), 'warn');
   }
   redraw();
   updateLabels();
@@ -818,13 +1341,13 @@ function handleDelClick(p) {
   const i = state.frameIndex;
   const res = deleteNearest(state.framesRaw[i], p.x, p.y);
   if (res.removedIndex < 0) {
-    log('このフレームには削除できる点がありません。', 'warn');
+    log(t('log.nothingToDelete'), 'warn');
     return;
   }
   state.framesRaw[i] = res.points;
   state.dirty = true;
   const r = /** @type {Pt} */ (res.removed);
-  log(`[frame ${i + 1}] 点 ${res.removedIndex} を削除: 画素 (${r.x.toFixed(1)}, ${r.y.toFixed(1)})`);
+  log(t('log.deleted', { f: i + 1, i: res.removedIndex, px: r.x.toFixed(1), py: r.y.toFixed(1) }));
   redraw();
   updateLabels();
 }
@@ -857,7 +1380,7 @@ function nudgeFrameStep(dir) {
     const smaller = STEP_LADDER.filter((v) => v < cur);
     setFrameStep(smaller.length ? smaller[smaller.length - 1] : 1);
   }
-  log(`送り幅を ${state.frameStep} フレームにしました。`);
+  log(t('log.step', { n: state.frameStep }));
 }
 
 /**
@@ -977,14 +1500,14 @@ async function renderFrameImages(index, dataset) {
 async function save() {
   if (!state.source || state.busy) return;
   if (!state.transform) {
-    const go = await showConfirm('キャリブレーションがまだです。実世界座標は全て NaN になりますが、保存しますか？',
-      { title: 'キャリブレーション未実施', okLabel: 'このまま保存' });
+    const go = await showConfirm(t('confirm.noCalibText'),
+      { title: t('confirm.noCalibTitle'), okLabel: t('confirm.saveAnyway') });
     if (!go) return;
   }
   const total = totalPoints(state.framesRaw);
   if (total === 0) {
-    const go = await showConfirm('クリック点が1つもありません。それでも保存しますか？',
-      { title: '点がありません', okLabel: 'このまま保存' });
+    const go = await showConfirm(t('confirm.noPointsText'),
+      { title: t('confirm.noPointsTitle'), okLabel: t('confirm.saveAnyway') });
     if (!go) return;
   }
 
@@ -992,9 +1515,9 @@ async function save() {
     const n = state.framesRaw.filter((pts) => pts.length > 0).length;
     // rendering is a seek + two canvas encodes per frame, so a long video is a long wait
     if (n > 30 && !await showConfirm(
-      `${n} フレーム分の PNG（plot と overlay）を書き出します。${n * 2} 枚になり時間がかかります。続けますか？`,
-      { title: 'フレームごとの PNG', okLabel: '書き出す', cancelLabel: 'やめる' })) {
-      log('保存を中止しました。設定（e）でフレームごとの PNG をオフにできます。', 'warn');
+      t('confirm.manyPngsText', { n, m: n * 2 }),
+      { title: t('confirm.manyPngsTitle'), okLabel: t('confirm.write'), cancelLabel: t('confirm.stop') })) {
+      log(t('log.saveStopped'), 'warn');
       return;
     }
   }
@@ -1008,11 +1531,11 @@ async function save() {
       dir = await anyWin.showDirectoryPicker({ mode: 'readwrite' });
     } catch (e) {
       if (/** @type {any} */ (e).name === 'AbortError') return;
-      log(`フォルダを開けませんでした: ${/** @type {Error} */ (e).message}`, 'err');
+      log(t('log.dirFailed', { msg: /** @type {Error} */ (e).message }), 'err');
       return;
     }
   } else {
-    log('このブラウザはフォルダ選択（File System Access API）に対応していません。ファイルを個別にダウンロードします。Chrome / Edge ならフォルダに直接保存できます。', 'warn');
+    log(t('log.noDirPicker'), 'warn');
   }
 
   state.busy = true;
@@ -1033,12 +1556,11 @@ async function save() {
     if (state.settings.framePngs) {
       for (let k = 0; k < framesWithPoints.length; k++) {
         const i = framesWithPoints[k];
-        setStatus(`画像を生成中... (${k + 1} / ${framesWithPoints.length})`);
+        setStatus('status.rendering', { k: k + 1, n: framesWithPoints.length });
         files.push(...await renderFrameImages(i, dataset));
       }
     } else if (framesWithPoints.length > 0) {
-      log(`フレームごとの PNG は書き出しません（対象 ${framesWithPoints.length} フレーム）。`
-        + '設定（e）の「フレームごとの PNG を書き出す」でオンにできます。');
+      log(t('log.pngsSkipped', { n: framesWithPoints.length }));
     }
 
     files.push({
@@ -1048,13 +1570,13 @@ async function save() {
 
     if (dir) {
       for (let k = 0; k < files.length; k++) {
-        setStatus(`書き出し中... (${k + 1} / ${files.length}) ${files[k].name}`);
+        setStatus('status.writing', { k: k + 1, n: files.length, name: files[k].name });
         const handle = await dir.getFileHandle(files[k].name, { create: true });
         const writable = await handle.createWritable();
         await writable.write(files[k].data);
         await writable.close();
       }
-      log(`保存しました: ${files.length} ファイル（${framesWithPoints.length} フレーム分の PNG を含む）`);
+      log(t('log.saved', { n: files.length, f: framesWithPoints.length }));
     } else {
       for (const f of files) {
         const url = URL.createObjectURL(f.data);
@@ -1065,13 +1587,13 @@ async function save() {
         URL.revokeObjectURL(url);
         await new Promise((r) => setTimeout(r, 120));
       }
-      log(`${files.length} ファイルをダウンロードしました。`);
+      log(t('log.downloaded', { n: files.length }));
     }
     state.dirty = false;
-    setStatus('保存が完了しました');
+    setStatus('status.saved');
   } catch (err) {
-    log(`保存に失敗しました: ${/** @type {Error} */ (err).message}`, 'err');
-    setStatus('保存に失敗しました');
+    log(t('log.saveFailed', { msg: /** @type {Error} */ (err).message }), 'err');
+    setStatus('status.saveFailed');
   } finally {
     await showFrame(restoreIndex);
     state.busy = false;
@@ -1088,14 +1610,14 @@ async function loadSessionFile() {
     try {
       const data = JSON.parse(await file.text());
       if (data.format !== 'click-to-get-coord/session') {
-        throw new Error('click-to-get-coord の session.json ではありません。');
+        throw new Error(t('log.notSession'));
       }
       if (data.source && data.source.name !== state.source.name) {
-        log(`警告: セッションの入力データ名 "${data.source.name}" が、いま開いているデータ "${state.source.name}" と異なります。`, 'warn');
+        log(t('log.sessionNameDiff', { a: data.source.name, b: state.source.name }), 'warn');
       }
       const n = state.source.frameCount;
       if (data.framesRaw.length !== n) {
-        log(`警告: セッションのフレーム数 ${data.framesRaw.length} が現在の ${n} と異なります。重なる範囲だけ復元します。`, 'warn');
+        log(t('log.sessionFramesDiff', { a: data.framesRaw.length, b: n }), 'warn');
       }
       state.framesRaw = Array.from({ length: n }, (_, i) => (data.framesRaw[i] || []).map(
         (/** @type {Pt} */ p) => ({ x: p.x, y: p.y }),
@@ -1112,18 +1634,21 @@ async function loadSessionFile() {
         state.frameTimes = data.source.frameTimes;
       }
       state.dirty = false;
-      log(`セッションを復元しました: ${totalPoints(state.framesRaw)} 点`);
+      log(t('log.sessionRestored', { n: totalPoints(state.framesRaw) }));
       await showFrame(0);
     } catch (err) {
-      log(`セッションを読み込めませんでした: ${/** @type {Error} */ (err).message}`, 'err');
+      log(t('log.sessionFailed', { msg: /** @type {Error} */ (err).message }), 'err');
     }
   };
   els.sessionInput.click();
 }
 
-// --- settings ----------------------------------------------------------------
+// --- settings sheet ----------------------------------------------------------
+// The common settings sheet of the yukmmz.github.io apps (see multitask-timer). Every
+// control applies the moment it changes; there is no OK / Cancel.
 
-function openSettings() {
+/** Write the current settings into the sheet's controls. */
+function syncSettingsSheet() {
   els.setDiameter.value = String(state.settings.diameter);
   els.setPointColor.value = state.settings.pointColor;
   els.setCalibColor.value = state.settings.calibColor;
@@ -1134,12 +1659,11 @@ function openSettings() {
   els.setFramePngs.checked = state.settings.framePngs;
   els.setIndexAuto.checked = state.settings.indexColorAuto;
   els.setIndexColor.value = state.settings.indexColor;
-  placeDialogAwayFrom(els.settings, undefined);
-  els.settings.showModal();
+  els.setIndexColor.disabled = state.settings.indexColorAuto;
 }
 
-function applySettings() {
-  setDiameter(Number(els.setDiameter.value));
+/** Read every sheet control except the diameter (see setDiameter) and apply it now. */
+function applySettingsFromSheet() {
   state.settings.pointColor = els.setPointColor.value;
   state.settings.calibColor = els.setCalibColor.value;
   state.settings.smooth = els.setSmooth.checked;
@@ -1149,18 +1673,142 @@ function applySettings() {
   state.settings.framePngs = els.setFramePngs.checked;
   state.settings.indexColorAuto = els.setIndexAuto.checked;
   state.settings.indexColor = els.setIndexColor.value;
+  els.setIndexColor.disabled = state.settings.indexColorAuto;
   redraw();
 }
 
 /**
- * Marker diameter, shared by the toolbar box, the settings dialog and the [ ] keys.
+ * Marker diameter, shared by the toolbar box, the settings sheet and the [ ] keys.
  * @param {number} d
  */
 function setDiameter(d) {
   if (!isFinite(d)) return;
   state.settings.diameter = Math.max(1, Math.min(40, Math.round(d)));
   els.markerSize.value = String(state.settings.diameter);
+  els.setDiameter.value = String(state.settings.diameter);
   redraw();
+}
+
+/** @param {boolean} open */
+function setSettingsOpen(open) {
+  if (open) syncSettingsSheet();
+  els.settingsPanel.hidden = !open;
+  els.backdrop.hidden = !open;
+  els.settingsBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+
+function openSettings() {
+  setSettingsOpen(true);
+}
+
+/** Close the settings sheet and the QR / changelog overlays. @returns {boolean} whether any was open */
+function closeOverlays() {
+  const wasOpen = !els.settingsPanel.hidden || !els.qrOverlay.hidden || !els.changelogOverlay.hidden;
+  setSettingsOpen(false);
+  els.qrOverlay.hidden = true;
+  els.changelogOverlay.hidden = true;
+  return wasOpen;
+}
+
+function anyOverlayOpen() {
+  return !els.settingsPanel.hidden || !els.qrOverlay.hidden || !els.changelogOverlay.hidden;
+}
+
+// --- changelog ---------------------------------------------------------------
+
+function readSeenVersion() {
+  try { return window.localStorage.getItem(SEEN_VERSION_KEY); } catch (e) { return null; }
+}
+
+function writeSeenVersion() {
+  try { window.localStorage.setItem(SEEN_VERSION_KEY, APP_VERSION); } catch (e) { /* ignore */ }
+}
+
+/**
+ * First visit ever: nothing is "new", so record the version quietly. Before 1.1.0 this
+ * app stored nothing in the browser, so only a visitor who already has something saved
+ * under `click-to-get-coord/` (the language) counts as returning and gets the mark.
+ */
+function initSeenVersion() {
+  if (readSeenVersion() !== null) return;
+  let hadData = false;
+  try { hadData = window.localStorage.getItem(LANG_KEY) !== null; } catch (e) { /* ignore */ }
+  if (!hadData) writeSeenVersion();
+}
+
+function syncNewsMark() {
+  const hasNews = readSeenVersion() !== APP_VERSION;
+  els.settingsBtn.classList.toggle('has-news', hasNews);
+  els.changelogBtn.classList.toggle('has-news', hasNews);
+}
+
+function buildChangelog() {
+  els.changelogList.textContent = '';
+  const lang = /** @type {any} */ (window).I18N.lang();
+  for (const entry of CHANGELOG) {
+    const section = document.createElement('section');
+    section.className = 'changelog-entry';
+    const head = document.createElement('h3');
+    head.className = 'changelog-version';
+    head.textContent = `v${entry.version} (${entry.date})`;
+    section.appendChild(head);
+    const list = document.createElement('ul');
+    for (const item of entry.items) {
+      const li = document.createElement('li');
+      li.textContent = /** @type {any} */ (item)[lang] || item.ja;
+      list.appendChild(li);
+    }
+    section.appendChild(list);
+    els.changelogList.appendChild(section);
+  }
+}
+
+function openChangelog() {
+  setSettingsOpen(false);
+  els.changelogOverlay.hidden = false;
+  els.changelogList.scrollTop = 0;
+  writeSeenVersion();
+  syncNewsMark();
+}
+
+// --- full screen -------------------------------------------------------------
+
+/** ⛶ toggles full screen. Hidden where the browser cannot do it (iPhone). */
+function fullscreenElement() {
+  const doc = /** @type {any} */ (document);
+  return doc.fullscreenElement || doc.webkitFullscreenElement || null;
+}
+
+function toggleFullscreen() {
+  const doc = /** @type {any} */ (document);
+  const root = /** @type {any} */ (document.documentElement);
+  if (fullscreenElement()) {
+    (doc.exitFullscreen || doc.webkitExitFullscreen).call(doc);
+  } else {
+    const req = root.requestFullscreen || root.webkitRequestFullscreen;
+    if (req) {
+      const p = req.call(root);
+      if (p && typeof p.catch === 'function') p.catch(() => { /* ignore */ });
+    }
+  }
+}
+
+function initFullscreen() {
+  const root = /** @type {any} */ (document.documentElement);
+  els.fullscreenBtn.hidden = !(root.requestFullscreen || root.webkitRequestFullscreen);
+  els.fullscreenBtn.addEventListener('click', toggleFullscreen);
+}
+
+// --- language ----------------------------------------------------------------
+
+/** Redraw the text that is built in JS rather than marked up with data-i18n. */
+function applyLanguage() {
+  const i18n = /** @type {any} */ (window).I18N;
+  els.langSelect.value = i18n.lang();
+  els.status.textContent = t(statusMsg.key, statusMsg.params);
+  updateFpsUi();
+  updateLabels();   // point count, and the guide bar through updateGuide()
+  buildChangelog();
 }
 
 // --- wiring ------------------------------------------------------------------
@@ -1175,16 +1823,42 @@ els.prev.addEventListener('click', () => step(-1));
 els.next.addEventListener('click', () => step(1));
 els.jump.addEventListener('click', jumpDialog);
 els.canvas.addEventListener('click', onCanvasClick);
-els.btnSettings.addEventListener('click', openSettings);
 els.btnHelp.addEventListener('click', () => els.help.showModal());
-els.setOk.addEventListener('click', applySettings);
+
+// settings sheet: ⚙ toggles it; ✕, a click on the backdrop and Esc close it
+els.settingsBtn.addEventListener('click', () => setSettingsOpen(els.settingsPanel.hidden));
+els.settingsClose.addEventListener('click', () => setSettingsOpen(false));
+els.backdrop.addEventListener('click', () => setSettingsOpen(false));
+els.langSelect.addEventListener('change', () => /** @type {any} */ (window).I18N.set(els.langSelect.value));
+els.setDiameter.addEventListener('change', () => setDiameter(Number(els.setDiameter.value)));
+// colours follow the picker live; checkboxes apply on change
+[els.setPointColor, els.setCalibColor, els.setIndexColor].forEach((el) => {
+  el.addEventListener('input', applySettingsFromSheet);
+});
+[els.setFramePngs, els.setIndexAuto, els.setMarkerEdge, els.setSmooth, els.setShowIndex,
+  els.setEqualAspect].forEach((el) => el.addEventListener('change', applySettingsFromSheet));
+
+// QR codes and changelog: close with the button, a click outside the card, or Esc
+els.qrBtn.addEventListener('click', () => {
+  setSettingsOpen(false);
+  els.qrOverlay.hidden = false;
+});
+els.qrClose.addEventListener('click', () => { els.qrOverlay.hidden = true; });
+els.qrOverlay.addEventListener('click', (e) => {
+  if (e.target === els.qrOverlay) els.qrOverlay.hidden = true;
+});
+els.changelogBtn.addEventListener('click', openChangelog);
+els.appVersion.addEventListener('click', openChangelog);
+els.changelogClose.addEventListener('click', () => { els.changelogOverlay.hidden = true; });
+els.changelogOverlay.addEventListener('click', (e) => {
+  if (e.target === els.changelogOverlay) els.changelogOverlay.hidden = true;
+});
 
 // Cancel buttons are type="button" on purpose: that leaves OK as the only submit button
 // in each form, so pressing Enter in a field confirms instead of cancelling.
 els.calibCancel.addEventListener('click', () => els.dlgCalib.close('cancel'));
 els.jumpCancel.addEventListener('click', () => els.dlgJump.close('cancel'));
 els.confirmCancel.addEventListener('click', () => els.dlgConfirm.close('cancel'));
-els.setCancel.addEventListener('click', () => els.settings.close('cancel'));
 
 els.markerSize.addEventListener('change', () => setDiameter(Number(els.markerSize.value)));
 els.frameStep.addEventListener('change', () => setFrameStep(Number(els.frameStep.value)));
@@ -1222,15 +1896,15 @@ els.fpsInput.addEventListener('change', async () => {
   const v = Number(els.fpsInput.value);
   if (!state.source || !isFinite(v) || v <= 0) return;
   const hadPoints = totalPoints(state.framesRaw) > 0;
-  if (hadPoints && !await showConfirm('fps を変えるとフレーム数が変わり、記録済みの点はクリアされます。続けますか？',
-    { title: 'fps の変更', okLabel: '変更する' })) {
+  if (hadPoints && !await showConfirm(t('confirm.fpsText'),
+    { title: t('confirm.fpsTitle'), okLabel: t('confirm.fpsOk') })) {
     updateFpsUi();
     return;
   }
   state.source.setFps(v);
   resetAnnotations();
   updateFpsUi();
-  log(`fps を ${v} に変更しました（${state.source.frameCount} フレーム）。記録済みの点はクリアされました。`, 'warn');
+  log(t('log.fpsChanged', { v, n: state.source.frameCount }), 'warn');
   enterCalibMode();
   await showFrame(0);
 });
@@ -1243,9 +1917,16 @@ document.addEventListener('drop', async (e) => {
 });
 
 document.addEventListener('keydown', (e) => {
+  // Esc first: it must also work while a control inside the settings sheet has focus
+  if (e.key === 'Escape' && !document.querySelector('dialog[open]') && closeOverlays()) {
+    e.preventDefault();
+    return;
+  }
   const target = /** @type {HTMLElement} */ (e.target);
   if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
   if (document.querySelector('dialog[open]')) return;
+  // the sheet and the overlays cover the page: no shortcuts reach it behind them
+  if (anyOverlayOpen()) return;
 
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'o') {
     e.preventDefault();
@@ -1288,7 +1969,23 @@ window.addEventListener('beforeunload', (e) => {
   e.returnValue = '';
 });
 
-log(`click-to-get-coord ${APP_VERSION} — 「開く」または画面へのドラッグ＆ドロップで動画・画像を読み込んでください。`);
-setStatus('ready');
+// --- startup -----------------------------------------------------------------
+
+// Before any text is produced: fills every data-i18n* element in the document.
+/** @type {any} */ (window).I18N.init(LANG_KEY, STRINGS);
+/** @type {any} */ (window).I18N.onChange(applyLanguage);
+els.langSelect.value = /** @type {any} */ (window).I18N.lang();
+
+els.appVersion.textContent = `v${APP_VERSION}`;
+// the QR images encode the same URLs; print the constants so the two cannot drift apart
+els.qrUrl.textContent = APP_URL;
+els.qrSrcUrl.textContent = SOURCE_URL;
+initSeenVersion();
+buildChangelog();
+syncNewsMark();
+initFullscreen();
+
+log(t('log.welcome', { v: APP_VERSION }));
+setStatus('status.ready');
 updateGuide();
 els.markerSize.value = String(state.settings.diameter);

@@ -3,17 +3,24 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>click-to-get-coord</title>
+<title>Click to Get Coord</title>
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<!-- UI text: the Japanese in the markup is only the pre-script default. The real strings
+     live in STRINGS (app.js) and are filled in by i18n.js through the data-i18n* attributes. -->
 <header id="toolbar">
+  <div class="group app-brand">
+    <h1 class="app-title">Click to Get Coord</h1>
+    <span id="app-version" class="app-version"></span>
+  </div>
+
   <div class="group">
-    <button id="btn-open" title="Ctrl+O">開く</button>
-    <button id="btn-load-session" disabled
+    <button id="btn-open" title="Ctrl+O" data-i18n="tb.open">開く</button>
+    <button id="btn-load-session" disabled data-i18n="tb.resume" data-i18n-title="tb.resumeTitle"
       title="前回の保存フォルダにある session.json を読み込み、キャリブレーションとクリック点を復元して続きから作業します">作業を再開</button>
-    <button id="btn-save" disabled title="Ctrl+S">保存</button>
+    <button id="btn-save" disabled title="Ctrl+S" data-i18n="tb.save">保存</button>
   </div>
 
   <div class="group" id="fps-group" hidden>
@@ -23,20 +30,24 @@
   </div>
 
   <div class="group modes">
-    <span class="label">モード</span>
+    <span class="label" data-i18n="tb.mode">モード</span>
     <button id="btn-calib" class="mode" data-mode="calib" disabled title="c">Calibration (c)</button>
     <button id="btn-add" class="mode" data-mode="add" disabled title="a">Add (a)</button>
     <button id="btn-del" class="mode" data-mode="del" disabled title="d">Delete (d)</button>
   </div>
 
   <div class="group">
-    <label for="marker-size" title="点の直径（画面上のピクセル）。[ で細く、] で太く">点の直径</label>
-    <input type="number" id="marker-size" min="1" max="40" step="1" title="[ で細く、] で太く">
+    <label for="marker-size" data-i18n="tb.diameter" data-i18n-title="tb.diameterTitle"
+      title="点の直径（画面上のピクセル）。[ で細く、] で太く">点の直径</label>
+    <input type="number" id="marker-size" min="1" max="40" step="1" data-i18n-title="tb.diameterKeys" title="[ で細く、] で太く">
   </div>
 
   <div class="group right">
-    <button id="btn-settings" title="e">設定 (e)</button>
-    <button id="btn-help" title="h">ヘルプ (h)</button>
+    <button id="btn-help" title="h" data-i18n="tb.help">ヘルプ (h)</button>
+    <button id="fullscreen-btn" class="btn btn-icon" type="button"
+            data-i18n-title="c.fullscreen" data-i18n-aria-label="c.fullscreen" title="全画面表示" aria-label="全画面表示">⛶</button>
+    <button id="settings-btn" class="btn btn-icon" type="button" aria-expanded="false"
+            data-i18n-title="c.settings" data-i18n-aria-label="c.settings" title="設定" aria-label="設定">⚙</button>
   </div>
 </header>
 
@@ -51,20 +62,21 @@
   <button id="btn-prev" disabled title="← / z">◀</button>
   <span id="frame-label">- / -</span>
   <button id="btn-next" disabled title="→ / x">▶</button>
-  <label for="frame-step" class="label" title="◀ ▶ 1回で進むフレーム数。, で減らし . で増やす">送り幅</label>
+  <label for="frame-step" class="label" data-i18n="nav.step" data-i18n-title="nav.stepTitle"
+    title="◀ ▶ 1回で進むフレーム数。, で減らし . で増やす">送り幅</label>
   <input type="number" id="frame-step" min="1" max="10000" step="1" value="1" disabled
-    title=", で減らし . で増やす">
-  <button id="btn-jump" disabled title="j">ジャンプ (j)</button>
+    data-i18n-title="nav.stepKeys" title=", で減らし . で増やす">
+  <button id="btn-jump" disabled title="j" data-i18n="nav.jump">ジャンプ (j)</button>
   <span id="frame-time" class="hint"></span>
 
   <span class="sep"></span>
 
-  <span class="label">表示</span>
-  <button id="btn-zoom-out" disabled title="縮小（- キー）">－</button>
+  <span class="label" data-i18n="nav.view">表示</span>
+  <button id="btn-zoom-out" disabled data-i18n-title="nav.zoomOut" title="縮小（- キー）">－</button>
   <span id="zoom-label">100%</span>
-  <button id="btn-zoom-in" disabled title="拡大（+ キー）">＋</button>
-  <button id="btn-zoom-reset" disabled title="全体表示に戻す（0 キー）">全体</button>
-  <span class="hint">ピンチ/Ctrl+ホイール=拡大縮小、2本指スクロール=移動</span>
+  <button id="btn-zoom-in" disabled data-i18n-title="nav.zoomIn" title="拡大（+ キー）">＋</button>
+  <button id="btn-zoom-reset" disabled data-i18n="nav.fit" data-i18n-title="nav.fitTitle" title="全体表示に戻す（0 キー）">全体</button>
+  <span class="hint" data-i18n="nav.gestures">ピンチ/Ctrl+ホイール=拡大縮小、2本指スクロール=移動</span>
 
   <span class="spacer"></span>
   <span id="point-count" class="hint"></span>
@@ -72,12 +84,12 @@
 
 <div id="seek-row" hidden>
   <input type="range" id="seek" min="0" max="0" value="0" step="1"
-    title="ドラッグまたはクリックで任意のフレームへ移動">
+    data-i18n-title="nav.seekTitle" title="ドラッグまたはクリックで任意のフレームへ移動">
 </div>
 
 <main id="stage">
   <canvas id="canvas"></canvas>
-  <p id="placeholder">動画または画像ファイルを開いてください（ドラッグ＆ドロップも可）</p>
+  <p id="placeholder" data-i18n="placeholder">動画または画像ファイルを開いてください（ドラッグ＆ドロップも可）</p>
 </main>
 
 <section id="logbox">
@@ -91,15 +103,15 @@
   <form method="dialog">
     <h2 id="calib-title">キャリブレーション 1点目の実世界座標</h2>
     <p class="hint" id="calib-pixel"></p>
-    <p class="lead">この点の<b>実際の座標</b>を入力してください。単位は任意（mm でも m でも図面上の値でも可）。</p>
+    <p class="lead" data-i18n-html="calib.lead">この点の<b>実際の座標</b>を入力してください。単位は任意（mm でも m でも図面上の値でも可）。</p>
     <div class="fields">
       <label>x <input type="number" id="calib-x" step="any" required autofocus></label>
       <label>y <input type="number" id="calib-y" step="any" required></label>
     </div>
     <p class="hint" id="calib-note"></p>
     <menu>
-      <button type="button" id="calib-cancel">キャンセル</button>
-      <button type="submit" value="ok" class="primary">OK（Enter）</button>
+      <button type="button" id="calib-cancel" data-i18n="dlg.cancel">キャンセル</button>
+      <button type="submit" value="ok" class="primary" data-i18n="dlg.okEnter">OK（Enter）</button>
     </menu>
   </form>
 </dialog>
@@ -107,14 +119,14 @@
 <!-- フレームジャンプ -->
 <dialog id="dlg-jump">
   <form method="dialog">
-    <h2>フレームへ移動</h2>
+    <h2 data-i18n="jump.title">フレームへ移動</h2>
     <div class="fields">
-      <label>フレーム番号 <input type="number" id="jump-value" min="1" step="1" required autofocus></label>
+      <label><span data-i18n="jump.label">フレーム番号</span> <input type="number" id="jump-value" min="1" step="1" required autofocus></label>
     </div>
     <p class="hint" id="jump-range"></p>
     <menu>
-      <button type="button" id="jump-cancel">キャンセル</button>
-      <button type="submit" value="ok" class="primary">移動（Enter）</button>
+      <button type="button" id="jump-cancel" data-i18n="dlg.cancel">キャンセル</button>
+      <button type="submit" value="ok" class="primary" data-i18n="jump.go">移動（Enter）</button>
     </menu>
   </form>
 </dialog>
@@ -131,109 +143,126 @@
   </form>
 </dialog>
 
-<dialog id="dlg-settings">
-  <form method="dialog">
-    <h2>設定</h2>
-    <label>点の直径（px） <input type="number" id="set-diameter" min="1" max="40" step="1"></label>
-    <label>クリック点の色 <input type="color" id="set-point-color"></label>
-    <label>キャリブレーション点の色 <input type="color" id="set-calib-color"></label>
-    <label><input type="checkbox" id="set-frame-pngs"> フレームごとの PNG（plot / overlay）を書き出す
-      — 画像は既定でオン、動画は枚数が膨らむため既定でオフ</label>
-    <label><input type="checkbox" id="set-index-auto"> 点の番号を点と同じ色にする</label>
-    <label>点の番号の色（上のチェックを外したとき） <input type="color" id="set-index-color"></label>
-    <label><input type="checkbox" id="set-marker-edge"> 点に白い縁取りをつける（太さは点の大きさに連動）</label>
-    <label><input type="checkbox" id="set-smooth"> プロットの線を滑らかな曲線にする</label>
-    <label><input type="checkbox" id="set-show-index"> 点の番号を表示する</label>
-    <label><input type="checkbox" id="set-equal-aspect"> プロットの縦横比を 1:1 に固定する（長さの計測など、x と y が同じ量のとき）</label>
-    <menu>
-      <button type="button" id="set-cancel">キャンセル</button>
-      <button type="submit" value="ok" class="primary" id="set-ok">OK</button>
-    </menu>
-  </form>
-</dialog>
+<!-- Settings sheet. The common rows (language, share, changelog, other apps) are the same
+     in every yukmmz.github.io app; this app's own settings sit between them. Every control
+     applies the moment it changes: there is no OK / Cancel. -->
+<div id="sheet-backdrop" class="backdrop" hidden></div>
+
+<section id="settings-panel" class="sheet" hidden data-i18n-aria-label="c.settings" aria-label="設定">
+  <div class="sheet-head">
+    <h2 class="sheet-title" data-i18n="c.settings">設定</h2>
+    <button id="settings-close" class="btn btn-icon" type="button"
+            data-i18n-aria-label="c.close" aria-label="閉じる">✕</button>
+  </div>
+
+  <div class="sheet-row">
+    <span class="sheet-label" data-i18n="c.language">言語</span>
+    <select id="lang-select" class="sheet-select" data-i18n-aria-label="c.language" aria-label="言語">
+      <option value="ja">日本語</option>
+      <option value="en">English</option>
+    </select>
+  </div>
+
+  <label class="sheet-row">
+    <span class="sheet-label" data-i18n="set.diameter">点の直径（px）</span>
+    <input type="number" id="set-diameter" min="1" max="40" step="1">
+  </label>
+  <label class="sheet-row">
+    <span class="sheet-label" data-i18n="set.pointColor">クリック点の色</span>
+    <input type="color" id="set-point-color">
+  </label>
+  <label class="sheet-row">
+    <span class="sheet-label" data-i18n="set.calibColor">キャリブレーション点の色</span>
+    <input type="color" id="set-calib-color">
+  </label>
+  <label class="sheet-row">
+    <span class="sheet-label"><span data-i18n="set.framePngs">フレームごとの PNG</span>
+      <small data-i18n="set.framePngsNote">plot / overlay を書き出す。画像は既定でオン、動画は枚数が膨らむため既定でオフ</small></span>
+    <input type="checkbox" id="set-frame-pngs">
+  </label>
+  <label class="sheet-row">
+    <span class="sheet-label" data-i18n="set.indexAuto">点の番号を点と同じ色にする</span>
+    <input type="checkbox" id="set-index-auto">
+  </label>
+  <label class="sheet-row">
+    <span class="sheet-label"><span data-i18n="set.indexColor">点の番号の色</span>
+      <small data-i18n="set.indexColorNote">上のチェックを外したとき</small></span>
+    <input type="color" id="set-index-color">
+  </label>
+  <label class="sheet-row">
+    <span class="sheet-label"><span data-i18n="set.markerEdge">点に白い縁取りをつける</span>
+      <small data-i18n="set.markerEdgeNote">太さは点の大きさに連動</small></span>
+    <input type="checkbox" id="set-marker-edge">
+  </label>
+  <label class="sheet-row">
+    <span class="sheet-label" data-i18n="set.smooth">プロットの線を滑らかな曲線にする</span>
+    <input type="checkbox" id="set-smooth">
+  </label>
+  <label class="sheet-row">
+    <span class="sheet-label" data-i18n="set.showIndex">点の番号を表示する</span>
+    <input type="checkbox" id="set-show-index">
+  </label>
+  <label class="sheet-row">
+    <span class="sheet-label"><span data-i18n="set.equalAspect">プロットの縦横比を 1:1 に固定する</span>
+      <small data-i18n="set.equalAspectNote">長さの計測など、x と y が同じ量のとき</small></span>
+    <input type="checkbox" id="set-equal-aspect">
+  </label>
+
+  <div class="sheet-row">
+    <span class="sheet-label" data-i18n="c.share">共有</span>
+    <button id="qrBtn" class="btn" type="button" data-i18n="c.showQr">QR コードを表示</button>
+  </div>
+
+  <div class="sheet-row">
+    <span class="sheet-label" data-i18n="c.changelog">更新履歴</span>
+    <button id="changelogBtn" class="btn" type="button" data-i18n="c.showChangelog">表示</button>
+  </div>
+
+  <div class="sheet-row">
+    <span class="sheet-label" data-i18n="c.otherApps">他のアプリ</span>
+    <a id="otherAppsLink" class="btn" href="https://yukmmz.github.io/" target="_blank" rel="noopener"
+       data-i18n="c.openPortal">アプリ一覧を開く</a>
+  </div>
+</section>
+
+<!-- QR オーバーレイ: アプリURL（左）とソースリポジトリURL（右） -->
+<div id="qrOverlay" hidden>
+  <div class="qrcard">
+    <div class="qrrow">
+      <div class="qrcol">
+        <div class="qrlabel">App</div>
+        <img class="qrImg" src="qr.svg" alt="QR code for the app URL">
+        <div class="qrurl" id="qrUrl"></div>
+      </div>
+      <div class="qrcol">
+        <div class="qrlabel">Source</div>
+        <img class="qrImg" src="src-qr.svg" alt="QR code for the source repository">
+        <div class="qrurl" id="qrSrcUrl"></div>
+      </div>
+    </div>
+    <button id="qrClose" class="btn" type="button" data-i18n="c.close">閉じる</button>
+  </div>
+</div>
+
+<!-- 更新履歴: 新しい順。中身は app.js の CHANGELOG から組み立てる -->
+<div id="changelogOverlay" hidden>
+  <div class="qrcard changelog-card" role="dialog" data-i18n-aria-label="c.changelog" aria-label="更新履歴">
+    <h2 class="changelog-title" data-i18n="c.changelog">更新履歴</h2>
+    <div id="changelogList" class="changelog-list"></div>
+    <button id="changelogClose" class="btn" type="button" data-i18n="c.close">閉じる</button>
+  </div>
+</div>
 
 <dialog id="dlg-help">
-  <h2>使い方</h2>
-  <ol>
-    <li><b>開く</b>（Ctrl+O）で動画ファイル、または画像ファイル（複数可）を選ぶ。</li>
-    <li>自動的に <b>Calibration モード</b>に入る。画像上の2点をクリックし、それぞれの実世界座標を
-      入力する。<b>x も y も異なる2点</b>を選ぶこと。</li>
-    <li>2点入力すると自動的に <b>Add モード</b>に入る。クリックで点を記録する。</li>
-    <li>消したい点があれば <b>Delete モード</b>（d）でその点の近くをクリックする。</li>
-    <li><b>保存</b>（Ctrl+S）で出力先フォルダを選ぶと、そのフォルダに全ファイルが書き出される。</li>
-  </ol>
-
-  <h3>フレームの移動（動画・複数画像）</h3>
-  <ul>
-    <li>画面上部の<b>シークバー</b>をドラッグ、またはクリックで任意のフレームへ飛べます。</li>
-    <li><b>◀ ▶</b>（← → / z x）は<b>送り幅</b>のフレーム数だけ進みます。既定は1フレームで、
-      ツールバーの数値欄か <b>, </b>／<b>.</b> キーで 1, 2, 5, 10, 20, 50, 100, 200, 500 と切り替わります。</li>
-    <li><b>j</b> でフレーム番号を直接指定できます。</li>
-  </ul>
-
-  <h3>キャリブレーションのやり直し</h3>
-  <p>点を打っている途中でも <b>c</b> キー（または Calibration ボタン）でやり直せます。</p>
-  <ul>
-    <li>記録済みのクリック点は<b>消えません</b>。新しい2点が確定した時点で、全点の実世界座標が
-      新しい変換で計算し直されます（画素座標を保持しているため）。</li>
-    <li>新しい2点が確定するまで、<b>今のキャリブレーションは有効なまま</b>です。1点だけ入れて
-      やめても、前の設定は失われません（a キーで Add に戻れば中断できます）。</li>
-    <li>やり直し中は、前のキャリブレーション点が薄く、新しい点が濃く表示されます。</li>
-  </ul>
-
-  <h3>拡大・移動</h3>
-  <table>
-    <tr><td>トラックパッドでピンチ</td><td>拡大・縮小（カーソル位置を中心に）</td></tr>
-    <tr><td>Ctrl/Cmd + ホイール</td><td>同上（マウスの場合）</td></tr>
-    <tr><td>2本指スクロール</td><td>表示位置の移動（パン）</td></tr>
-    <tr><td>ホイール / Shift+ホイール</td><td>上下 / 左右に移動（マウスの場合）</td></tr>
-    <tr><td>+ / -</td><td>拡大 / 縮小</td></tr>
-    <tr><td>0</td><td>全体表示に戻す</td></tr>
-  </table>
-  <p class="hint">3本指スクロールは macOS 自身が使うため、ブラウザには届きません。</p>
-
-  <h3>ショートカット</h3>
-  <table>
-    <tr><td>Ctrl+O</td><td>ファイルを開く</td></tr>
-    <tr><td>Ctrl+S</td><td>保存</td></tr>
-    <tr><td>c / a / d</td><td>Calibration / Add / Delete モード</td></tr>
-    <tr><td>→ または x</td><td>次のフレーム</td></tr>
-    <tr><td>← または z</td><td>前のフレーム</td></tr>
-    <tr><td>j</td><td>フレーム番号を指定して移動</td></tr>
-    <tr><td>, / .</td><td>送り幅（◀ ▶ 1回で進むフレーム数）を減らす / 増やす</td></tr>
-    <tr><td>[ / ]</td><td>点の直径を小さく / 大きく</td></tr>
-    <tr><td>e</td><td>設定</td></tr>
-    <tr><td>h</td><td>このヘルプ</td></tr>
-  </table>
-
-  <h3>「作業を再開」とは</h3>
-  <p>保存すると、出力フォルダに <code>session.json</code>（キャリブレーションの2点と変換係数、
-    フレームごとのクリック点）が書き出されます。<b>作業を再開</b>はこれを読み戻す機能です。</p>
-  <ol>
-    <li>前回と<b>同じ動画・画像</b>を「開く」で読み込む（画像そのものは session.json に入っていません）</li>
-    <li><b>作業を再開</b>を押して、前回の <code>session.json</code> を選ぶ</li>
-    <li>キャリブレーションと打った点が全部戻るので、続きから追加・削除できる</li>
-  </ol>
-  <p class="hint">用途: 途中で中断したとき、点を打ち足したいとき、キャリブレーションだけやり直したいとき。</p>
-
-  <h3>保存されるもの</h3>
-  <ul>
-    <li><code>coords.mat</code> — MATLAB / scipy で読めるバイナリ（<code>coords_raw</code>, <code>coords_real</code> ほか）</li>
-    <li><code>coords.csv</code> — 全点を1ファイルにまとめたテキスト</li>
-    <li><code>plot_frame_XXXX.png</code> — 実世界座標系でのクリック点と、それを結ぶ曲線</li>
-    <li><code>overlay_frame_XXXX.png</code> — 元画像にクリック点を重ねた検証用画像</li>
-    <li><code>session.json</code> — 作業再開用の状態</li>
-    <li><code>README.md</code> — 上記すべての読み方の説明（Markdown）</li>
-  </ul>
-  <p class="hint">フレームごとの PNG は、<b>画像入力では既定でオン、動画では既定でオフ</b>です
-    （動画は対象フレームが大量になりうるため）。設定（e）で切り替えられます。数値データは
-    <code>coords.mat</code> / <code>coords.csv</code> に全て入っているので、図は後から作り直せます。</p>
-  <form method="dialog"><menu><button type="submit" value="ok" class="primary">閉じる</button></menu></form>
+  <!-- filled from STRINGS['help.body'] -->
+  <div data-i18n-html="help.body"></div>
+  <form method="dialog"><menu><button type="submit" value="ok" class="primary" data-i18n="c.close">閉じる</button></menu></form>
 </dialog>
 
 <input type="file" id="file-input" accept="video/*,image/*" multiple hidden>
 <input type="file" id="session-input" accept="application/json,.json" hidden>
 
+<script src="i18n.js"></script>
 <script src="calib.js"></script>
 <script src="points.js"></script>
 <script src="matwriter.js"></script>

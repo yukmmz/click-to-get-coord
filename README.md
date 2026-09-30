@@ -16,6 +16,8 @@ No upload, no server, no install — everything runs locally in the browser.
   (`requestVideoFrameCallback`), and the media time of every visited frame is recorded
 - **Save to a folder** — pick an output folder and the tool writes every artifact into it
 - **Resume later** — reload `session.json` to continue where you left off
+- **Japanese / English UI** — follows the browser language; switch it in the settings (⚙).
+  Only the screen is translated: the exported files are the same in either language
 
 ## Output
 
@@ -31,7 +33,7 @@ Choosing an output folder writes:
 | `README.md` | A self-contained description of every file and every column |
 
 The per-frame PNGs default to **on for images and off for video** — an annotated clip can
-easily mean hundreds of files and a long export. The switch is in the settings, and the
+easily mean hundreds of files and a long export. The switch is in the settings (⚙), and the
 written `README.md` says which of them are present. The numbers are all in `coords.mat` /
 `coords.csv`, so the figures can be redrawn later either way.
 
@@ -43,11 +45,11 @@ pts = d['coords_real'][0][0]     # frame 0, shape (n_points, 2)
 
 ## Usage
 
-1. **開く** (Ctrl+O) — choose a video file, or one or more image files (drag & drop works too)
+1. **Open** / 開く (Ctrl+O) — choose a video file, or one or more image files (drag & drop works too)
 2. Calibration mode starts automatically: click two points whose real-world coordinates you
    know, and type each as `x,y`. Pick two points that differ in **both** x and y.
 3. Add mode starts automatically: click to record points. `d` switches to Delete mode.
-4. **保存** (Ctrl+S) — choose an output folder.
+4. **Save** / 保存 (Ctrl+S) — choose an output folder.
 
 ### Moving between frames
 
@@ -81,8 +83,9 @@ Three-finger scroll is consumed by macOS itself and never reaches the page.
 | `j` | Jump to a frame number |
 | `,` / `.` | Smaller / larger frame step |
 | `[` / `]` | Smaller / larger point markers |
-| `e` | Settings (colours, marker outline, smooth curve, plot aspect) |
+| `e` | Settings — same as ⚙ (colours, marker outline, smooth curve, plot aspect, …) |
 | `h` | Help |
+| `Esc` | Close the settings, the QR codes or the changelog |
 
 ### Re-calibrating part way through
 
@@ -101,8 +104,20 @@ light background — and can be given their own colour.
 ### Resuming a session
 
 Saving writes `session.json` next to the data. To continue later: open the same video or
-images again, press **作業を再開**, and pick that `session.json` — the calibration and every
+images again, press **Resume** (作業を再開), and pick that `session.json` — the calibration and every
 recorded point come back. The media itself is never stored in the session file.
+
+### Settings, language and sharing
+
+The ⚙ button at the top right (or `e`) opens the settings. Every change applies at once —
+there is no OK button; close the panel with ✕, a click outside it, or `Esc`. Besides the
+marker and plot options it holds the language (日本語 / English), QR codes for the app and
+its source, the changelog (also opened by clicking the version next to the app name) and a
+link to the other apps. ⛶ next to it toggles full screen where the browser supports it.
+
+The app keeps nothing in the browser except the chosen language and the last version whose
+changelog you have seen (`localStorage`, keys `click-to-get-coord/lang` and
+`click-to-get-coord/seen-version`). Settings such as colours reset on reload.
 
 ## Calibration
 
@@ -127,8 +142,11 @@ downward. This matches the original desktop tool exactly.
 ## Development
 
 There is no build step, no package manager and **no server-side code** — the whole app is
-`index.html` + `style.css` + a handful of `.js` files, which is exactly what GitHub Pages
-serves. Everything runs in the browser.
+`index.html` + `style.css` + a handful of `.js` files (plus `qr.svg` / `src-qr.svg` and the
+icon), which is exactly what GitHub Pages serves. Everything runs in the browser.
+
+UI text lives in the `STRINGS` table in `app.js` (Japanese and English) and is applied by
+`i18n.js`, a file shared unchanged by all the yukmmz.github.io apps.
 
 ### Trying it locally
 
@@ -150,7 +168,7 @@ node test_calib.js       # calibration maths
 node test_points.js      # per-frame point list
 node test_plot.js        # plot tick generation
 node test_exporters.js   # CSV / session / README / .mat encoding
-node test_wiring.js      # index.html <-> app.js consistency
+node test_wiring.js      # index.html <-> app.js consistency, STRINGS keys in both languages
 node test_e2e_chrome.js  # end-to-end in headless Chrome (needs Chrome installed)
 ```
 

@@ -18,7 +18,8 @@
  * Build the image->real transform from two calibration point pairs.
  * @param {[Pt, Pt]} imgPts image coordinates of the two clicked points
  * @param {[Pt, Pt]} realPts real-world coordinates entered for those points
- * @returns {{transform: Transform, warnings: string[]}}
+ * @returns {{transform: Transform, warnings: string[]}} warnings are UI message keys
+ *   (translated by app.js through STRINGS), so this stays independent of the UI language
  */
 function computeTransform(imgPts, realPts) {
   const [p0, p1] = imgPts;
@@ -31,17 +32,17 @@ function computeTransform(imgPts, realPts) {
   let scaleX = 1;
   let scaleY = 1;
   if (dxImg === 0) {
-    warnings.push('2点の画像 X 座標が同じです。scaleX = 1 を使用します。');
+    warnings.push('calib.sameImgX');
   } else {
     scaleX = (r1.x - r0.x) / dxImg;
   }
   if (dyImg === 0) {
-    warnings.push('2点の画像 Y 座標が同じです。scaleY = 1 を使用します。');
+    warnings.push('calib.sameImgY');
   } else {
     scaleY = (r1.y - r0.y) / dyImg;
   }
-  if (scaleX === 0) warnings.push('scaleX が 0 です。2点の実世界 X 座標が同じではありませんか。');
-  if (scaleY === 0) warnings.push('scaleY が 0 です。2点の実世界 Y 座標が同じではありませんか。');
+  if (scaleX === 0) warnings.push('calib.zeroScaleX');
+  if (scaleY === 0) warnings.push('calib.zeroScaleY');
 
   return {
     transform: { p0: { x: p0.x, y: p0.y }, r0: { x: r0.x, y: r0.y }, scaleX, scaleY },

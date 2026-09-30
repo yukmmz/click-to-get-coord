@@ -36,6 +36,12 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // Helpers injected into the page before each test body.
 const PRELUDE = `
   const out = { checks: [], pngs: {} };
+  // The text checks below are written against the Japanese UI; the headless profile's
+  // browser language must not decide which one they see.
+  I18N.set('ja');
+  // The settings sheet applies each change at once: set the control, fire its event.
+  const setCheck = (el, on) => { el.checked = on; el.dispatchEvent(new Event('change', { bubbles: true })); };
+  const setColor = (el, v) => { el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); };
   const check = (name, cond, detail) => out.checks.push({ name, ok: !!cond, detail: detail === undefined ? null : detail });
   // image coordinates -> client coordinates, through the current zoom/pan transform
   const clickAt = (ix, iy) => {
@@ -300,24 +306,42 @@ ${PRELUDE}
   check('overlay png non-trivial', imgs[1].data.size > 3000, imgs[1].data.size);
   for (const img of imgs) out.pngs['e2e_' + img.name] = await toB64(img.data);
 
-  // --- marker outline: on by default, switchable from the settings dialog ---
+  // --- the settings sheet: opens with e / ⚙, closes with ✕ / backdrop / Esc ---
+  key('e');
+  check('e opens the settings sheet', !els.settingsPanel.hidden && !els.backdrop.hidden);
+  check('the sheet shows the current settings',
+    els.setMarkerEdge.checked === state.settings.markerEdge && els.setDiameter.value === String(state.settings.diameter));
+  key('Escape');
+  check('Esc closes it', els.settingsPanel.hidden && els.backdrop.hidden);
+  els.settingsBtn.click();
+  check('⚙ opens it', !els.settingsPanel.hidden);
+  els.backdrop.click();
+  check('a click outside closes it', els.settingsPanel.hidden);
+  els.settingsBtn.click();
+  els.settingsClose.click();
+  check('✕ closes it', els.settingsPanel.hidden);
+
+  // --- marker outline: on by default, switchable from the settings sheet ---
   check('marker edge is on by default', state.settings.markerEdge === true, state.settings.markerEdge);
   const overlayWithEdge = await toB64(imgs[1].data);
   openSettings();
-  if (!await waitFor(() => els.settings.open)) throw new Error('settings dialog did not open');
-  els.setMarkerEdge.checked = false;
-  els.setOk.click();
-  if (!await waitFor(() => !els.settings.open)) throw new Error('settings dialog did not close');
-  check('settings dialog turns the edge off', state.settings.markerEdge === false, state.settings.markerEdge);
+  setCheck(els.setMarkerEdge, false);
+  check('the sheet turns the edge off immediately', state.settings.markerEdge === false, state.settings.markerEdge);
   const overlayNoEdge = await toB64((await renderFrameImages(0, ds))[1].data);
   check('the rendered overlay actually changes without the edge',
     overlayNoEdge !== overlayWithEdge, overlayWithEdge.length + ' vs ' + overlayNoEdge.length);
-  openSettings();
-  await waitFor(() => els.settings.open);
-  els.setMarkerEdge.checked = true;
-  els.setOk.click();
-  await waitFor(() => !els.settings.open);
+  setCheck(els.setMarkerEdge, true);
   check('and back on again', state.settings.markerEdge === true, state.settings.markerEdge);
+
+  // --- the diameter box in the sheet and the toolbar box stay in sync ---
+  els.setDiameter.value = '9';
+  els.setDiameter.dispatchEvent(new Event('change', { bubbles: true }));
+  check('sheet diameter applies and updates the toolbar box',
+    state.settings.diameter === 9 && els.markerSize.value === '9', state.settings.diameter + ' / ' + els.markerSize.value);
+  els.markerSize.value = '4';
+  els.markerSize.dispatchEvent(new Event('change', { bubbles: true }));
+  check('toolbar diameter updates the sheet box', els.setDiameter.value === '4', els.setDiameter.value);
+  setSettingsOpen(false);
 
   // --- point numbers take the point colour by default, and never white ---
   check('index colour follows the point colour by default',
@@ -326,20 +350,61 @@ ${PRELUDE}
   check('the default index colour is not white', indexColor().toLowerCase() !== '#ffffff', indexColor());
   const plotDefaultIndex = await toB64((await renderFrameImages(0, ds))[0].data);
   openSettings();
-  await waitFor(() => els.settings.open);
-  els.setIndexAuto.checked = false;
-  els.setIndexColor.value = '#00aa00';
-  els.setOk.click();
-  await waitFor(() => !els.settings.open);
+  check('the index colour picker is disabled while it follows the point colour', els.setIndexColor.disabled === true);
+  setCheck(els.setIndexAuto, false);
+  setColor(els.setIndexColor, '#00aa00');
   check('an explicit index colour overrides it', indexColor() === '#00aa00', indexColor());
   const plotCustomIndex = await toB64((await renderFrameImages(0, ds))[0].data);
   check('the plot actually uses the index colour', plotCustomIndex !== plotDefaultIndex,
     plotDefaultIndex.length + ' vs ' + plotCustomIndex.length);
-  openSettings();
-  await waitFor(() => els.settings.open);
-  els.setIndexAuto.checked = true;
-  els.setOk.click();
-  await waitFor(() => !els.settings.open);
+  setCheck(els.setIndexAuto, true);
+  setSettingsOpen(false);
+
+  // --- language: the UI switches, the exports do not ---
+  const csvJa = buildCsv(ds);
+  const readmeJa = buildReadme(ds, ['README.md', 'coords.csv']);
+  I18N.set('en');
+  check('English: guide bar, buttons and html lang follow', els.guideText.textContent === STRINGS.en['guide.add']
+    && els.open.textContent === 'Open' && document.documentElement.lang === 'en',
+    els.guideText.textContent + ' / ' + els.open.textContent);
+  check('English: the status line is redrawn', statusMsg.key in STRINGS.en
+    && els.status.textContent === I18N.t(statusMsg.key, statusMsg.params) && I18N.lang() === 'en', els.status.textContent);
+  check('English: the language is remembered', localStorage.getItem('click-to-get-coord/lang') === 'en');
+  check('exports are not translated', buildCsv(ds) === csvJa && buildReadme(ds, ['README.md', 'coords.csv']) === readmeJa);
+  check('calibration warnings are translated', STRINGS.en[computeTransform(
+    [{ x: 1, y: 1 }, { x: 1, y: 5 }], [{ x: 0, y: 0 }, { x: 1, y: 1 }]).warnings[0]] !== undefined);
+  I18N.set('ja');
+  check('and back to Japanese', els.open.textContent === '開く' && document.documentElement.lang === 'ja');
+  check('both languages define the same keys',
+    Object.keys(STRINGS.ja).sort().join() === Object.keys(STRINGS.en).sort().join());
+
+  // --- changelog, QR and full screen ---
+  check('version label', els.appVersion.textContent === 'v' + APP_VERSION && CHANGELOG[0].version === APP_VERSION,
+    els.appVersion.textContent);
+  els.appVersion.click();
+  check('the version opens the changelog', !els.changelogOverlay.hidden
+    && els.changelogList.querySelectorAll('.changelog-entry').length === CHANGELOG.length);
+  check('opening it clears the news dot', localStorage.getItem('click-to-get-coord/seen-version') === APP_VERSION
+    && !els.settingsBtn.classList.contains('has-news'));
+  els.changelogOverlay.click();
+  check('a click outside closes the changelog', els.changelogOverlay.hidden);
+  els.settingsBtn.click();
+  els.qrBtn.click();
+  check('Show QR opens the QR overlay and closes the sheet', !els.qrOverlay.hidden && els.settingsPanel.hidden);
+  check('the QR overlay prints both URLs', els.qrUrl.textContent === APP_URL && els.qrSrcUrl.textContent === SOURCE_URL);
+  const qrImgs = Array.from(els.qrOverlay.querySelectorAll('img'));
+  await waitFor(() => qrImgs.every((i) => i.complete));
+  check('both QR images load', qrImgs.length === 2 && qrImgs.every((i) => i.naturalWidth > 0));
+  key('Escape');
+  check('Esc closes the QR overlay', els.qrOverlay.hidden);
+  els.settingsBtn.click();
+  els.qrBtn.click();
+  els.qrOverlay.click();
+  check('a click outside closes the QR overlay', els.qrOverlay.hidden);
+  els.qrBtn.click();
+  els.qrClose.click();
+  check('Close closes the QR overlay', els.qrOverlay.hidden);
+  check('the full-screen button is shown where supported', els.fullscreenBtn.hidden === !document.documentElement.requestFullscreen);
 
   // Calling the picker without a user gesture always fails; what matters is *why*.
   // "user gesture" => the API is usable here. "opaque origin"/"not allowed" => this
@@ -459,11 +524,10 @@ ${PRELUDE}
   check('the readme explains why the frame PNGs are absent',
     videoReadme.includes('フレームごとの PNG について') && !videoReadme.includes('### plot_frame_XXXX.png'));
   openSettings();
-  await waitFor(() => els.settings.open);
-  els.setFramePngs.checked = true;
-  els.setOk.click();
-  await waitFor(() => !els.settings.open);
+  check('the sheet shows them off for video', els.setFramePngs.checked === false);
+  setCheck(els.setFramePngs, true);
   check('the setting can turn them back on', state.settings.framePngs === true, state.settings.framePngs);
+  setSettingsOpen(false);
   out.pngs['e2e_video_overlay.png'] = await toB64(imgs[1].data);
 
   out.logLines = Array.from(document.querySelectorAll('#log div')).map((d) => d.textContent);
@@ -476,6 +540,7 @@ const MIME = {
   '.css': 'text/css; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
   '.png': 'image/png',
+  '.svg': 'image/svg+xml',
 };
 
 /** Minimal read-only static server for the test run. */

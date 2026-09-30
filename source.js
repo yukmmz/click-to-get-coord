@@ -26,6 +26,18 @@
  * @property {() => void} dispose
  */
 
+/**
+ * UI text from the STRINGS table (app.js) through the shared i18n.js, which is loaded
+ * before this file. Falls back to the key when i18n.js is absent.
+ * @param {string} key
+ * @param {Record<string, string|number>} [params]
+ * @returns {string}
+ */
+function srcText(key, params) {
+  const i18n = /** @type {any} */ (globalThis).I18N;
+  return i18n ? i18n.t(key, params) : key;
+}
+
 /** Frame rates that real cameras and containers actually use. */
 const COMMON_FPS = [23.976, 24, 25, 29.97, 30, 48, 50, 59.94, 60, 100, 119.88, 120, 200, 240];
 
@@ -147,24 +159,24 @@ async function createVideoSource(file, log) {
 
   await new Promise((resolve, reject) => {
     video.onloadedmetadata = () => resolve(undefined);
-    video.onerror = () => reject(new Error(`動画を読み込めませんでした: ${file.name}`));
+    video.onerror = () => reject(new Error(srcText('src.videoFailed', { name: file.name })));
   });
   await ensureDuration(video);
   const duration = isFinite(video.duration) && video.duration > 0 ? video.duration : 0;
   if (duration === 0) {
-    log('警告: この動画の長さを取得できませんでした。フレーム送りができない可能性があります。');
+    log(srcText('src.noDuration'));
   }
 
-  log('フレームレートを検出中...');
+  log(srcText('src.detectingFps'));
   let fps = await detectVideoFps(video);
   /** @type {'detected'|'manual'} */
   let fpsSource = 'detected';
   if (!fps) {
     fps = 30;
     fpsSource = 'manual';
-    log('フレームレートを自動検出できませんでした（このブラウザは requestVideoFrameCallback 非対応）。30 fps と仮定します。ツールバーで変更できます。');
+    log(srcText('src.fpsUnknown'));
   } else {
-    log(`フレームレート検出: ${fps} fps`);
+    log(srcText('src.fpsDetected', { fps }));
   }
   video.currentTime = 0;
 
@@ -228,17 +240,18 @@ async function createImageSource(files, log) {
     try {
       return await createImageBitmap(f);
     } catch (e) {
-      throw new Error(`画像を読み込めませんでした: ${f.name}`);
+      throw new Error(srcText('src.imageFailed', { name: f.name }));
     }
   }));
 
   const sizes = bitmaps.map((b) => `${b.width}x${b.height}`);
   if (new Set(sizes).size > 1) {
-    log(`警告: 画像のサイズが揃っていません（${Array.from(new Set(sizes)).join(', ')}）。キャリブレーションは全画像で共通に適用されるため、拡大率が異なる画像では実世界座標がずれます。`);
+    log(srcText('src.sizeMismatch', { sizes: Array.from(new Set(sizes)).join(', ') }));
   }
 
   const src = /** @type {FrameSource} */ ({
     kind: 'images',
+    // Not translated: the name is written into every export (CSV, session.json, README).
     name: sorted.length === 1 ? sorted[0].name : `${sorted.length} 枚の画像`,
     files: sorted.map((f) => f.name),
     width: bitmaps[0].width,

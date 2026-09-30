@@ -37,6 +37,30 @@ body {
 }
 
 .group + .group { margin-left: 14px; }
+
+/* App name + version: the same look in every yukmmz.github.io app. */
+.app-brand {
+  align-items: baseline;
+  gap: .45em;
+  white-space: nowrap;
+}
+
+.app-title {
+  font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Segoe UI", Roboto, sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: .02em;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.app-version {
+  font-size: 11px;
+  font-weight: 400;
+  opacity: .55;
+  white-space: nowrap;
+}
 .group.right { margin-left: auto; }
 .spacer { flex: 1; }
 
@@ -275,3 +299,250 @@ dialog table { border-collapse: collapse; font-size: 13.5px; }
 dialog td { padding: 2px 14px 2px 0; }
 dialog code { background: #1b1b1b; padding: 1px 5px; border-radius: 3px; font-size: 12.5px; }
 dialog ol, dialog ul { margin: 6px 0; padding-left: 22px; font-size: 14px; }
+
+/* ---------- common header / settings pieces (same in every yukmmz.github.io app) ----------
+   Shapes follow multitask-timer; colours are this app's fixed dark palette. */
+
+:root {
+  --card: #262626;
+  --border: #3a3a3a;
+  --text: #eee;
+  --muted: #9a9a9a;
+  --danger: #ff6b6b;
+  --radius: 16px;
+  --shadow-run: 0 6px 22px rgba(0, 0, 0, .55);
+}
+
+/* The version next to the app name opens the changelog. */
+.app-version { cursor: pointer; }
+.app-version:hover { text-decoration: underline; }
+
+.btn-icon {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 10px;
+  color: var(--muted);
+  background: transparent;
+  border-color: transparent;
+  font-size: 1.1rem;
+  line-height: 1;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-icon:hover:not(:disabled) { color: var(--text); }
+
+/* The settings gear is the one control that must read at a glance. */
+#settings-btn {
+  font-size: 2.1rem;
+  line-height: 1;
+  overflow: visible;
+}
+
+#fullscreen-btn { font-size: 1.5rem; }
+#fullscreen-btn[hidden] { display: none; }
+
+/* A link styled as a button (「アプリ一覧を開く」). */
+a.btn {
+  display: inline-block;
+  padding: 6px 12px;
+  font-size: 14px;
+  color: var(--text);
+  background: #3a3a3a;
+  border: 1px solid #4d4d4d;
+  border-radius: 4px;
+  text-decoration: none;
+}
+
+a.btn:hover { background: #474747; }
+
+/* ---------- settings sheet ---------- */
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: rgba(0, 0, 0, .5);
+}
+
+.sheet {
+  position: fixed;
+  z-index: 30;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(440px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  background: var(--card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-run);
+  padding: 16px;
+}
+
+.sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.sheet-title { font-size: 1rem; margin: 0; }
+
+.sheet-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+}
+
+label.sheet-row { cursor: pointer; }
+
+.sheet-label { font-size: .9rem; line-height: 1.4; }
+
+.sheet-label small {
+  display: block;
+  font-size: .75rem;
+  color: var(--muted);
+}
+
+.sheet-row input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  accent-color: #2f6feb;
+}
+
+.sheet-row input[type="color"],
+.sheet-row input[type="number"] { flex: 0 0 auto; }
+.sheet-row input[type="color"]:disabled { opacity: .35; }
+.sheet-row input[type="number"] { width: 72px; }
+
+.sheet-select {
+  font: inherit;
+  font-size: 14px;
+  color: var(--text);
+  background: #1b1b1b;
+  border: 1px solid #4d4d4d;
+  border-radius: 6px;
+  padding: 5px 8px;
+  max-width: 60%;
+}
+
+/* ---------- QR overlay ---------- */
+
+#qrOverlay,
+#changelogOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, .55);
+}
+
+.qrcard {
+  background: var(--card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-run);
+  padding: 20px;
+  max-width: min(560px, calc(100vw - 32px));
+  text-align: center;
+}
+
+.qrrow {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.qrcol { flex: 0 1 210px; }
+
+.qrlabel {
+  font-size: .82rem;
+  font-weight: 700;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+/* The SVG is drawn on white; keep it that way on the dark card so it stays scannable. */
+.qrImg {
+  width: 100%;
+  max-width: 190px;
+  height: auto;
+  background: #fff;
+  border-radius: 8px;
+}
+
+.qrurl {
+  font-size: .7rem;
+  color: var(--muted);
+  word-break: break-all;
+  margin-top: 4px;
+}
+
+#qrClose { margin-top: 16px; }
+
+/* ---------- changelog overlay ---------- */
+
+.changelog-card {
+  width: min(520px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+}
+
+.changelog-title { font-size: 1rem; margin: 0 0 8px; }
+
+.changelog-list {
+  overflow-y: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.changelog-entry + .changelog-entry {
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+  padding-top: 8px;
+}
+
+.changelog-version { font-size: .9rem; margin: 0 0 4px; }
+
+.changelog-entry ul {
+  margin: 0;
+  padding-left: 1.2em;
+  font-size: .85rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+#changelogClose { margin-top: 12px; align-self: center; }
+
+/* A small dot on ⚙ and on the changelog button until the new version's changelog has
+   been opened once. */
+#settings-btn, #changelogBtn { position: relative; }
+
+#settings-btn.has-news::after,
+#changelogBtn.has-news::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--danger);
+}
