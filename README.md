@@ -1,5 +1,7 @@
 # click-to-get-coord
 
+*English / [日本語](README_ja.md)*
+
 Click points on a **video or image** in your browser and get them back as
 **real-world coordinates**, calibrated from two reference points.
 
@@ -18,30 +20,6 @@ No upload, no server, no install — everything runs locally in the browser.
 - **Resume later** — reload `session.json` to continue where you left off
 - **Japanese / English UI** — follows the browser language; switch it in the settings (⚙).
   Only the screen is translated: the exported files are the same in either language
-
-## Output
-
-Choosing an output folder writes:
-
-| File | Contents |
-|---|---|
-| `coords.mat` | MATLAB Level 5 binary. `coords_raw` / `coords_real` are 1×N cell arrays of `n_i × 2` doubles — the same layout as the original Python tool, readable by MATLAB and `scipy.io.loadmat` |
-| `coords.csv` | Every point of every frame in one text file, with the calibration in `#` comment lines |
-| `plot_frame_XXXX.png` | The clicked points of that frame in calibrated coordinates, connected in click order |
-| `overlay_frame_XXXX.png` | The source frame with the clicked points drawn on it, for verification |
-| `session.json` | Full state, reloadable by the app |
-| `README.md` | A self-contained description of every file and every column |
-
-The per-frame PNGs default to **on for images and off for video** — an annotated clip can
-easily mean hundreds of files and a long export. The switch is in the settings (⚙), and the
-written `README.md` says which of them are present. The numbers are all in `coords.mat` /
-`coords.csv`, so the figures can be redrawn later either way.
-
-```python
-from scipy.io import loadmat
-d = loadmat('coords.mat')
-pts = d['coords_real'][0][0]     # frame 0, shape (n_points, 2)
-```
 
 ## Usage
 
@@ -84,8 +62,8 @@ Three-finger scroll is consumed by macOS itself and never reaches the page.
 | `,` / `.` | Smaller / larger frame step |
 | `[` / `]` | Smaller / larger point markers |
 | `e` | Settings — same as ⚙ (colours, marker outline, smooth curve, plot aspect, …) |
-| `h` | Help |
-| `Esc` | Close the settings, the QR codes or the changelog |
+| `?` or `h` | How to use — same as the ? button at the top right |
+| `Esc` | Close the settings, the QR codes, the changelog or the help |
 
 ### Re-calibrating part way through
 
@@ -113,11 +91,52 @@ The ⚙ button at the top right (or `e`) opens the settings. Every change applie
 there is no OK button; close the panel with ✕, a click outside it, or `Esc`. Besides the
 marker and plot options it holds the language (日本語 / English), QR codes for the app and
 its source, the changelog (also opened by clicking the version next to the app name) and a
-link to the other apps. ⛶ next to it toggles full screen where the browser supports it.
+link to the other apps. ⛶ next to it toggles full screen where the browser supports it, and
+? (or the `?` / `h` key) opens the how-to-use window with every shortcut; it closes the same
+way as the changelog (Close, a click outside it, or `Esc`).
 
-The app keeps nothing in the browser except the chosen language and the last version whose
-changelog you have seen (`localStorage`, keys `click-to-get-coord/lang` and
-`click-to-get-coord/seen-version`). Settings such as colours reset on reload.
+## Running locally
+
+| How | What it covers |
+|---|---|
+| Open `index.html` directly (`file://`) | Everything, including loading files and rendering. Verified in Chrome. |
+| Serve the folder over http, then open `http://localhost:8000` | Same as above, and matches how GitHub Pages will serve it. Use the VS Code *Live Server* extension, `npx serve`, or any other static server. |
+| `node tests/test_e2e_chrome.js` | Automated end-to-end run in headless Chrome (images + video). |
+
+`node tests/test_e2e_chrome.js` starts its own throwaway static server; `--file` runs the same
+checks straight off disk with no server at all.
+
+## Saved data
+
+The app keeps only a few small things in the browser (`localStorage`): the settings changed
+in ⚙ (`click-to-get-coord/settings` — the per-frame PNG switch is not kept, since it is chosen
+again each time you open files), the chosen language (`click-to-get-coord/lang`) and the last
+version whose changelog you have seen (`click-to-get-coord/seen-version`). **Clear saved data**
+at the bottom of the settings removes all of them. Videos, images and points are never stored.
+
+## Output
+
+Choosing an output folder writes:
+
+| File | Contents |
+|---|---|
+| `coords.mat` | MATLAB Level 5 binary. `coords_raw` / `coords_real` are 1×N cell arrays of `n_i × 2` doubles — the same layout as the original Python tool, readable by MATLAB and `scipy.io.loadmat` |
+| `coords.csv` | Every point of every frame in one text file, with the calibration in `#` comment lines |
+| `plot_frame_XXXX.png` | The clicked points of that frame in calibrated coordinates, connected in click order |
+| `overlay_frame_XXXX.png` | The source frame with the clicked points drawn on it, for verification |
+| `session.json` | Full state, reloadable by the app |
+| `README.md` | A self-contained description of every file and every column |
+
+The per-frame PNGs default to **on for images and off for video** — an annotated clip can
+easily mean hundreds of files and a long export. The switch is in the settings (⚙), and the
+written `README.md` says which of them are present. The numbers are all in `coords.mat` /
+`coords.csv`, so the figures can be redrawn later either way.
+
+```python
+from scipy.io import loadmat
+d = loadmat('coords.mat')
+pts = d['coords_real'][0][0]     # frame 0, shape (n_points, 2)
+```
 
 ## Calibration
 
@@ -148,31 +167,24 @@ icon), which is exactly what GitHub Pages serves. Everything runs in the browser
 UI text lives in the `STRINGS` table in `app.js` (Japanese and English) and is applied by
 `i18n.js`, a file shared unchanged by all the yukmmz.github.io apps.
 
-### Trying it locally
-
-| How | What it covers |
-|---|---|
-| Open `index.html` directly (`file://`) | Everything, including loading files and rendering. Verified in Chrome. |
-| Serve the folder over http, then open `http://localhost:8000` | Same as above, and matches how GitHub Pages will serve it. Use the VS Code *Live Server* extension, `npx serve`, or any other static server. |
-| `node test_e2e_chrome.js` | Automated end-to-end run in headless Chrome (images + video). |
-
-`node test_e2e_chrome.js` starts its own throwaway static server; `--file` runs the same
-checks straight off disk with no server at all.
-
 ### Tests
 
 Node only, no packages required:
 
 ```
-node test_calib.js       # calibration maths
-node test_points.js      # per-frame point list
-node test_plot.js        # plot tick generation
-node test_exporters.js   # CSV / session / README / .mat encoding
-node test_wiring.js      # index.html <-> app.js consistency, STRINGS keys in both languages
-node test_e2e_chrome.js  # end-to-end in headless Chrome (needs Chrome installed)
+node tests/test_calib.js       # calibration maths
+node tests/test_points.js      # per-frame point list
+node tests/test_plot.js        # plot tick generation
+node tests/test_exporters.js   # CSV / session / README / .mat encoding
+node tests/test_wiring.js      # index.html <-> app.js consistency, STRINGS keys in both languages
+node tests/test_e2e_chrome.js  # end-to-end in headless Chrome (needs Chrome installed)
 ```
 
 ## Origin
 
 A browser port of a Python + Tkinter + OpenCV desktop tool, extended to support still images
 in addition to video.
+
+## License
+
+MIT — see [LICENSE](LICENSE).

@@ -342,8 +342,21 @@ dialog ol, dialog ul { margin: 6px 0; padding-left: 22px; font-size: 14px; }
   overflow: visible;
 }
 
-#fullscreen-btn { font-size: 1.5rem; }
+#help-btn { font-size: 1.35rem; font-weight: 700; }
 #fullscreen-btn[hidden] { display: none; }
+/* Full-screen icon: corners out to expand, corners in (while full screen) to shrink */
+.fs-icon {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+#fullscreen-btn .fs-exit,
+#fullscreen-btn.is-fullscreen .fs-enter { display: none; }
+#fullscreen-btn.is-fullscreen .fs-exit { display: block; }
 
 /* A link styled as a button (「アプリ一覧を開く」). */
 a.btn {
@@ -358,6 +371,7 @@ a.btn {
 }
 
 a.btn:hover { background: #474747; }
+.btn-danger { color: var(--danger); }
 
 /* ---------- settings sheet ---------- */
 
@@ -440,7 +454,8 @@ label.sheet-row { cursor: pointer; }
 /* ---------- QR overlay ---------- */
 
 #qrOverlay,
-#changelogOverlay {
+#changelogOverlay,
+#helpOverlay {
   position: fixed;
   inset: 0;
   z-index: 60;
@@ -530,6 +545,22 @@ label.sheet-row { cursor: pointer; }
 }
 
 #changelogClose { margin-top: 12px; align-self: center; }
+
+/* ---------- help overlay (使い方): the changelog card, a little wider for the tables ---------- */
+
+.help-card { width: min(640px, calc(100vw - 32px)); max-width: none; }
+
+.help-body { font-size: .9rem; line-height: 1.6; padding-right: 4px; }
+.help-body p { margin: 6px 0; }
+.help-body .hint { font-size: .8rem; color: var(--muted); }
+.help-body h3 { margin: 16px 0 6px; font-size: .9rem; color: #9ec5ff; }
+.help-body h3:first-child { margin-top: 0; }
+.help-body ol, .help-body ul { margin: 6px 0; padding-left: 22px; }
+.help-body table { border-collapse: collapse; font-size: .85rem; }
+.help-body td { padding: 2px 14px 2px 0; vertical-align: top; }
+.help-body code { background: #1b1b1b; padding: 1px 5px; border-radius: 3px; font-size: .8rem; }
+
+#helpClose { margin-top: 12px; align-self: center; }
 
 /* A small dot on ⚙ and on the changelog button until the new version's changelog has
    been opened once. */

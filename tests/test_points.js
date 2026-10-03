@@ -1,7 +1,7 @@
-// node test_points.js
+// node tests/test_points.js
 'use strict';
 const assert = require('assert');
-const { nearestIndex, addPoint, deleteNearest, totalPoints } = require('./points.js');
+const { nearestIndex, addPoint, deleteNearest, totalPoints } = require('../points.js');
 
 const pts = [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }];
 

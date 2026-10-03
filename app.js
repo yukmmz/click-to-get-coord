@@ -12,15 +12,27 @@
 /* Single source of truth for the version; session.json records it. The app and source
  * URLs are APP_URL / SOURCE_URL in exporters.js (shared global scope of the classic
  * scripts), and the QR images (qr.svg / src-qr.svg) encode those same URLs. */
-const APP_VERSION = '1.1.0';
+const APP_VERSION = '1.2.0';
 
 const LANG_KEY = 'click-to-get-coord/lang';
 const SEEN_VERSION_KEY = 'click-to-get-coord/seen-version';
+/** The ⚙ settings (colours, sizes, toggles) as one JSON object. */
+const SETTINGS_KEY = 'click-to-get-coord/settings';
+/** Every key this app keeps in the browser starts with this; "Clear saved data" removes them all. */
+const STORAGE_PREFIX = 'click-to-get-coord/';
 
 /* What changed, newest first, shown from the settings sheet and from the version next
  * to the app name. Bumping APP_VERSION means adding an entry here (test_wiring.js checks
  * that the first entry matches). Written for users, in both languages. */
 const CHANGELOG = [
+  { version: '1.2.0', date: '2026-10-01', items: [
+    { ja: '使い方を上部の ? ボタンに移しました（? キーや h キーでも開きます）',
+      en: 'How to use moved to the ? button at the top (the ? and h keys open it too)' },
+    { ja: '全画面表示中は、全画面ボタンが「縮小」の形に変わるようにしました',
+      en: 'While in full screen, the full-screen button changes to a "shrink" icon' },
+    { ja: '設定（⚙）で変えた点の直径・色・表示の切り替えを、次に開いたときも覚えておくようにしました。設定に「保存データを消す」を追加しました',
+      en: 'The marker size, colours and display toggles you set in ⚙ are now remembered for next time. Added "Clear saved data" to the settings' },
+  ] },
   { version: '1.1.0', date: '2026-10-01', items: [
     { ja: '左上にアプリ名とバージョンを表示するようにしました。バージョンを押すと更新履歴が開きます',
       en: 'The app name and version are shown at the top left; click the version to open this changelog' },
@@ -50,6 +62,10 @@ const STRINGS = {
     'c.settings': '設定', 'c.close': '閉じる', 'c.language': '言語', 'c.share': '共有',
     'c.showQr': 'QR コードを表示', 'c.changelog': '更新履歴', 'c.showChangelog': '表示',
     'c.otherApps': '他のアプリ', 'c.openPortal': 'アプリ一覧を開く', 'c.fullscreen': '全画面表示',
+    'c.help': '使い方', 'c.exitFullscreen': '全画面を終了',
+    'c.data': 'データ', 'c.clearData': '保存データを消す',
+    'c.clearConfirm': 'このブラウザに保存されている、このアプリのデータ（設定の点の直径・色・表示の切り替え、言語、更新履歴の既読）をすべて消して、ページを読み込み直します。'
+      + 'クリックした点とキャリブレーションはもともと保存されないので、書き出していない点は失われます。元に戻せません。よろしいですか？',
 
     'tb.open': '開く',
     'tb.resume': '作業を再開',
@@ -59,7 +75,6 @@ const STRINGS = {
     'tb.diameter': '点の直径',
     'tb.diameterTitle': '点の直径（画面上のピクセル）。[ で細く、] で太く',
     'tb.diameterKeys': '[ で細く、] で太く',
-    'tb.help': 'ヘルプ (h)',
 
     'nav.step': '送り幅',
     'nav.stepTitle': '◀ ▶ 1回で進むフレーム数。, で減らし . で増やす',
@@ -68,6 +83,8 @@ const STRINGS = {
     'nav.view': '表示',
     'nav.zoomOut': '縮小（- キー）',
     'nav.zoomIn': '拡大（+ キー）',
+    'nav.prev': '前のフレーム（← / z）',
+    'nav.next': '次のフレーム（→ / x）',
     'nav.fit': '全体',
     'nav.fitTitle': '全体表示に戻す（0 キー）',
     'nav.gestures': 'ピンチ/Ctrl+ホイール=拡大縮小、2本指スクロール=移動',
@@ -204,8 +221,7 @@ const STRINGS = {
     'src.imageFailed': '画像を読み込めませんでした: {name}',
     'src.sizeMismatch': '警告: 画像のサイズが揃っていません（{sizes}）。キャリブレーションは全画像で共通に適用されるため、拡大率が異なる画像では実世界座標がずれます。',
 
-    'help.body': `<h2>使い方</h2>
-<ol>
+    'help.body': `<ol>
   <li><b>開く</b>（Ctrl+O）で動画ファイル、または画像ファイル（複数可）を選ぶ。</li>
   <li>自動的に <b>Calibration モード</b>に入る。画像上の2点をクリックし、それぞれの実世界座標を
     入力する。<b>x も y も異なる2点</b>を選ぶこと。</li>
@@ -254,8 +270,8 @@ const STRINGS = {
   <tr><td>, / .</td><td>送り幅（◀ ▶ 1回で進むフレーム数）を減らす / 増やす</td></tr>
   <tr><td>[ / ]</td><td>点の直径を小さく / 大きく</td></tr>
   <tr><td>e</td><td>設定（⚙ と同じ。変更はその場で反映）</td></tr>
-  <tr><td>h</td><td>このヘルプ</td></tr>
-  <tr><td>Esc</td><td>設定・QR コード・更新履歴を閉じる</td></tr>
+  <tr><td>? / h</td><td>この使い方（上部の ? ボタンと同じ）</td></tr>
+  <tr><td>Esc</td><td>設定・QR コード・更新履歴・使い方を閉じる</td></tr>
 </table>
 
 <h3>「作業を再開」とは</h3>
@@ -286,6 +302,10 @@ const STRINGS = {
     'c.settings': 'Settings', 'c.close': 'Close', 'c.language': 'Language', 'c.share': 'Share',
     'c.showQr': 'Show QR codes', 'c.changelog': 'Changelog', 'c.showChangelog': 'Show',
     'c.otherApps': 'Other apps', 'c.openPortal': 'Open app list', 'c.fullscreen': 'Full screen',
+    'c.help': 'How to use', 'c.exitFullscreen': 'Exit full screen',
+    'c.data': 'Data', 'c.clearData': 'Clear saved data',
+    'c.clearConfirm': 'This deletes everything this app has saved in this browser (the settings: marker size, colours and display toggles; the language; which changelog you have read) and reloads the page. '
+      + 'Clicked points and the calibration are never saved, so any points you have not exported will be lost. This cannot be undone. Continue?',
 
     'tb.open': 'Open',
     'tb.resume': 'Resume',
@@ -295,7 +315,6 @@ const STRINGS = {
     'tb.diameter': 'Point size',
     'tb.diameterTitle': 'Point diameter (screen pixels). [ smaller, ] larger',
     'tb.diameterKeys': '[ smaller, ] larger',
-    'tb.help': 'Help (h)',
 
     'nav.step': 'Step',
     'nav.stepTitle': 'Frames moved by one press of ◀ ▶. , for fewer, . for more',
@@ -304,6 +323,8 @@ const STRINGS = {
     'nav.view': 'View',
     'nav.zoomOut': 'Zoom out (- key)',
     'nav.zoomIn': 'Zoom in (+ key)',
+    'nav.prev': 'Previous frame (← / z)',
+    'nav.next': 'Next frame (→ / x)',
     'nav.fit': 'Fit',
     'nav.fitTitle': 'Show the whole frame (0 key)',
     'nav.gestures': 'Pinch / Ctrl+wheel = zoom, two-finger scroll = pan',
@@ -440,8 +461,7 @@ const STRINGS = {
     'src.imageFailed': 'Could not load the image: {name}',
     'src.sizeMismatch': 'Warning: the images differ in size ({sizes}). One calibration applies to all of them, so images at a different scale get wrong real-world coordinates.',
 
-    'help.body': `<h2>How to use</h2>
-<ol>
+    'help.body': `<ol>
   <li><b>Open</b> (Ctrl+O) a video file, or one or more image files.</li>
   <li><b>Calibration mode</b> starts automatically. Click two points on the image and enter the
     real-world coordinates of each. Pick <b>two points that differ in both x and y</b>.</li>
@@ -490,8 +510,8 @@ const STRINGS = {
   <tr><td>, / .</td><td>Smaller / larger frame step (frames per press of ◀ ▶)</td></tr>
   <tr><td>[ / ]</td><td>Smaller / larger points</td></tr>
   <tr><td>e</td><td>Settings (same as ⚙; changes apply immediately)</td></tr>
-  <tr><td>h</td><td>This help</td></tr>
-  <tr><td>Esc</td><td>Close the settings, QR codes or changelog</td></tr>
+  <tr><td>? / h</td><td>This help (same as the ? button at the top)</td></tr>
+  <tr><td>Esc</td><td>Close the settings, QR codes, changelog or this help</td></tr>
 </table>
 
 <h3>What "Resume" does</h3>
@@ -558,8 +578,9 @@ const els = {
   log: /** @type {HTMLElement} */ (document.getElementById('log')),
   logbox: /** @type {HTMLElement} */ (document.getElementById('logbox')),
   status: /** @type {HTMLElement} */ (document.getElementById('status')),
-  help: /** @type {HTMLDialogElement} */ (document.getElementById('dlg-help')),
-  btnHelp: /** @type {HTMLButtonElement} */ (document.getElementById('btn-help')),
+  helpBtn: /** @type {HTMLButtonElement} */ (document.getElementById('help-btn')),
+  helpOverlay: /** @type {HTMLElement} */ (document.getElementById('helpOverlay')),
+  helpClose: /** @type {HTMLButtonElement} */ (document.getElementById('helpClose')),
   appVersion: /** @type {HTMLElement} */ (document.getElementById('app-version')),
   fullscreenBtn: /** @type {HTMLButtonElement} */ (document.getElementById('fullscreen-btn')),
   settingsBtn: /** @type {HTMLButtonElement} */ (document.getElementById('settings-btn')),
@@ -579,6 +600,7 @@ const els = {
   modeButtons: /** @type {HTMLButtonElement[]} */ (Array.from(document.querySelectorAll('button.mode'))),
   setDiameter: /** @type {HTMLInputElement} */ (document.getElementById('set-diameter')),
   setEqualAspect: /** @type {HTMLInputElement} */ (document.getElementById('set-equal-aspect')),
+  clearDataBtn: /** @type {HTMLButtonElement} */ (document.getElementById('clearDataBtn')),
   setMarkerEdge: /** @type {HTMLInputElement} */ (document.getElementById('set-marker-edge')),
   setFramePngs: /** @type {HTMLInputElement} */ (document.getElementById('set-frame-pngs')),
   setIndexAuto: /** @type {HTMLInputElement} */ (document.getElementById('set-index-auto')),
@@ -1647,6 +1669,52 @@ async function loadSessionFile() {
 // The common settings sheet of the yukmmz.github.io apps (see multitask-timer). Every
 // control applies the moment it changes; there is no OK / Cancel.
 
+/**
+ * Settings remembered between visits. framePngs is left out on purpose: it is reset from
+ * the source kind every time a file is opened (on for images, off for video).
+ */
+const PERSISTED_SETTINGS = ['diameter', 'pointColor', 'calibColor', 'markerEdge', 'smooth',
+  'showIndex', 'indexColorAuto', 'indexColor', 'equalAspect'];
+
+/** Restore saved settings over the defaults; a missing or broken entry keeps the default. */
+function loadSettings() {
+  let saved = null;
+  try { saved = JSON.parse(window.localStorage.getItem(SETTINGS_KEY) || 'null'); } catch (e) { saved = null; }
+  if (!saved || typeof saved !== 'object') return;
+  const s = /** @type {Record<string, any>} */ (state.settings);
+  PERSISTED_SETTINGS.forEach((k) => {
+    const v = saved[k];
+    if (typeof v !== typeof s[k]) return;
+    if (typeof v === 'number' && !isFinite(v)) return;
+    if (typeof v === 'string' && !/^#[0-9a-f]{6}$/i.test(v)) return;
+    s[k] = v;
+  });
+  s.diameter = Math.max(1, Math.min(40, Math.round(s.diameter)));
+}
+
+function saveSettings() {
+  const s = /** @type {Record<string, any>} */ (state.settings);
+  /** @type {Record<string, any>} */ const out = {};
+  PERSISTED_SETTINGS.forEach((k) => { out[k] = s[k]; });
+  try { window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(out)); } catch (e) { /* ignore */ }
+}
+
+/** Delete everything this app keeps in the browser and start over (after asking). */
+async function clearSavedData() {
+  closeOverlays();
+  const ok = await showConfirm(t('c.clearConfirm'), { title: t('c.clearData'), okLabel: t('c.clearData') });
+  if (!ok) return;
+  try {
+    const keys = [];
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const k = window.localStorage.key(i);
+      if (k && k.startsWith(STORAGE_PREFIX)) keys.push(k);
+    }
+    keys.forEach((k) => window.localStorage.removeItem(k));
+  } catch (e) { /* ignore */ }
+  location.reload();
+}
+
 /** Write the current settings into the sheet's controls. */
 function syncSettingsSheet() {
   els.setDiameter.value = String(state.settings.diameter);
@@ -1674,6 +1742,7 @@ function applySettingsFromSheet() {
   state.settings.indexColorAuto = els.setIndexAuto.checked;
   state.settings.indexColor = els.setIndexColor.value;
   els.setIndexColor.disabled = state.settings.indexColorAuto;
+  saveSettings();
   redraw();
 }
 
@@ -1686,6 +1755,7 @@ function setDiameter(d) {
   state.settings.diameter = Math.max(1, Math.min(40, Math.round(d)));
   els.markerSize.value = String(state.settings.diameter);
   els.setDiameter.value = String(state.settings.diameter);
+  saveSettings();
   redraw();
 }
 
@@ -1701,17 +1771,27 @@ function openSettings() {
   setSettingsOpen(true);
 }
 
-/** Close the settings sheet and the QR / changelog overlays. @returns {boolean} whether any was open */
+/** Close the settings sheet and the QR / changelog / help overlays. @returns {boolean} whether any was open */
 function closeOverlays() {
-  const wasOpen = !els.settingsPanel.hidden || !els.qrOverlay.hidden || !els.changelogOverlay.hidden;
+  const wasOpen = anyOverlayOpen();
   setSettingsOpen(false);
   els.qrOverlay.hidden = true;
   els.changelogOverlay.hidden = true;
+  els.helpOverlay.hidden = true;
   return wasOpen;
 }
 
 function anyOverlayOpen() {
-  return !els.settingsPanel.hidden || !els.qrOverlay.hidden || !els.changelogOverlay.hidden;
+  return !els.settingsPanel.hidden || !els.qrOverlay.hidden || !els.changelogOverlay.hidden
+    || !els.helpOverlay.hidden;
+}
+
+/** The "How to use" window, opened by the header ? button or the ? / h keys. */
+function openHelp() {
+  closeOverlays();
+  els.helpOverlay.hidden = false;
+  const body = els.helpOverlay.querySelector('.help-body');
+  if (body) body.scrollTop = 0;
 }
 
 // --- changelog ---------------------------------------------------------------
@@ -1793,10 +1873,26 @@ function toggleFullscreen() {
   }
 }
 
+/**
+ * Swap the icon and label so the button shows what a press will do (expand
+ * when windowed, shrink while full screen). Also runs when the user leaves full
+ * screen with Esc, which never touches the button.
+ */
+function syncFullscreenBtn() {
+  const on = !!fullscreenElement();
+  const label = t(on ? 'c.exitFullscreen' : 'c.fullscreen');
+  els.fullscreenBtn.classList.toggle('is-fullscreen', on);
+  els.fullscreenBtn.title = label;
+  els.fullscreenBtn.setAttribute('aria-label', label);
+}
+
 function initFullscreen() {
   const root = /** @type {any} */ (document.documentElement);
   els.fullscreenBtn.hidden = !(root.requestFullscreen || root.webkitRequestFullscreen);
   els.fullscreenBtn.addEventListener('click', toggleFullscreen);
+  document.addEventListener('fullscreenchange', syncFullscreenBtn);
+  document.addEventListener('webkitfullscreenchange', syncFullscreenBtn);
+  syncFullscreenBtn();
 }
 
 // --- language ----------------------------------------------------------------
@@ -1808,6 +1904,7 @@ function applyLanguage() {
   els.status.textContent = t(statusMsg.key, statusMsg.params);
   updateFpsUi();
   updateLabels();   // point count, and the guide bar through updateGuide()
+  syncFullscreenBtn();
   buildChangelog();
 }
 
@@ -1823,7 +1920,6 @@ els.prev.addEventListener('click', () => step(-1));
 els.next.addEventListener('click', () => step(1));
 els.jump.addEventListener('click', jumpDialog);
 els.canvas.addEventListener('click', onCanvasClick);
-els.btnHelp.addEventListener('click', () => els.help.showModal());
 
 // settings sheet: ⚙ toggles it; ✕, a click on the backdrop and Esc close it
 els.settingsBtn.addEventListener('click', () => setSettingsOpen(els.settingsPanel.hidden));
@@ -1837,8 +1933,9 @@ els.setDiameter.addEventListener('change', () => setDiameter(Number(els.setDiame
 });
 [els.setFramePngs, els.setIndexAuto, els.setMarkerEdge, els.setSmooth, els.setShowIndex,
   els.setEqualAspect].forEach((el) => el.addEventListener('change', applySettingsFromSheet));
+els.clearDataBtn.addEventListener('click', clearSavedData);
 
-// QR codes and changelog: close with the button, a click outside the card, or Esc
+// QR codes, changelog and help: close with the button, a click outside the card, or Esc
 els.qrBtn.addEventListener('click', () => {
   setSettingsOpen(false);
   els.qrOverlay.hidden = false;
@@ -1852,6 +1949,12 @@ els.appVersion.addEventListener('click', openChangelog);
 els.changelogClose.addEventListener('click', () => { els.changelogOverlay.hidden = true; });
 els.changelogOverlay.addEventListener('click', (e) => {
   if (e.target === els.changelogOverlay) els.changelogOverlay.hidden = true;
+});
+// How to use: the same closing rules as the changelog
+els.helpBtn.addEventListener('click', openHelp);
+els.helpClose.addEventListener('click', () => { els.helpOverlay.hidden = true; });
+els.helpOverlay.addEventListener('click', (e) => {
+  if (e.target === els.helpOverlay) els.helpOverlay.hidden = true;
 });
 
 // Cancel buttons are type="button" on purpose: that leaves OK as the only submit button
@@ -1955,7 +2058,7 @@ document.addEventListener('keydown', (e) => {
     case 'd': if (state.source) enterDelMode(); break;
     case 'j': if (state.source) jumpDialog(); break;
     case 'e': openSettings(); break;
-    case 'h': els.help.showModal(); break;
+    case 'h': case '?': openHelp(); break;
     default: return;
   }
   e.preventDefault();
@@ -1988,4 +2091,5 @@ initFullscreen();
 log(t('log.welcome', { v: APP_VERSION }));
 setStatus('status.ready');
 updateGuide();
+loadSettings();
 els.markerSize.value = String(state.settings.diameter);

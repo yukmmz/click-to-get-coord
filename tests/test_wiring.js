@@ -1,4 +1,4 @@
-// node test_wiring.js
+// node tests/test_wiring.js
 // Static consistency check between index.html and the scripts: every element the
 // app looks up must exist, every script tag must point at a real file, and every
 // cross-file function app.js calls must be defined somewhere.
@@ -7,7 +7,8 @@ const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 
-const read = (f) => fs.readFileSync(path.join(__dirname, f), 'utf8');
+const ROOT = path.join(__dirname, '..');
+const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
 const html = read('index.html');
 const appjs = read('app.js');
 
@@ -15,7 +16,7 @@ const appjs = read('app.js');
 const scripts = Array.from(html.matchAll(/<script src="([^"]+)"><\/script>/g)).map((m) => m[1]);
 assert.ok(scripts.length >= 6, `expected the app scripts, got ${scripts.join(', ')}`);
 for (const s of scripts) {
-  assert.ok(fs.existsSync(path.join(__dirname, s)), `index.html references missing script ${s}`);
+  assert.ok(fs.existsSync(path.join(ROOT, s)), `index.html references missing script ${s}`);
 }
 assert.strictEqual(scripts[scripts.length - 1], 'app.js', 'app.js must load last');
 assert.strictEqual(scripts[0], 'i18n.js', 'the shared i18n.js must load before the app scripts');
@@ -71,8 +72,38 @@ for (const id of ['settings-btn', 'fullscreen-btn', 'settings-panel', 'sheet-bac
 }
 assert.ok(!ids.has('dlg-settings') && !ids.has('set-ok'), 'the old settings <dialog> must be gone');
 assert.ok(html.indexOf('id="fullscreen-btn"') < html.indexOf('id="settings-btn"'), '⛶ sits left of ⚙');
+// --- common ? (How to use) button: [⛶][?][⚙], opens #helpOverlay, not a <dialog> ---
+for (const id of ['help-btn', 'helpOverlay', 'helpClose']) {
+  assert.ok(ids.has(id), `index.html must define #${id} for the common help window`);
+}
+assert.ok(!ids.has('dlg-help') && !ids.has('btn-help'), 'the old help <dialog> and "ヘルプ (h)" button must be gone');
+assert.ok(/<button id="help-btn" class="btn btn-icon"[^>]*data-i18n-title="c\.help"[^>]*>\?<\/button>/.test(html),
+  'the help button is the common ? icon button');
+assert.ok(html.indexOf('id="fullscreen-btn"') < html.indexOf('id="help-btn"')
+  && html.indexOf('id="help-btn"') < html.indexOf('id="settings-btn"'), '? sits between ⛶ and ⚙');
+// Full-screen button: two SVG icons (expand / shrink), label set from JS, not data-i18n
+assert.ok(/<button id="fullscreen-btn"[^>]*>\s*<svg class="fs-icon fs-enter"[\s\S]*?<svg class="fs-icon fs-exit"/.test(html),
+  'the full-screen button holds the expand and shrink icons');
+assert.ok(!/<button id="fullscreen-btn"[^>]*data-i18n/.test(html),
+  'the full-screen label follows the state in JS, so it must not carry data-i18n');
+assert.ok(/<div id="helpOverlay" hidden>[\s\S]*?data-i18n="c\.help"[\s\S]*?data-i18n-html="help\.body"/.test(html),
+  'the help window has the c.help heading and the help.body content');
+assert.ok(/function openHelp\(/.test(appjs) && /case 'h': case '\?': openHelp\(\)/.test(appjs),
+  'both h and ? open the help window');
+assert.ok(/els\.helpOverlay\.hidden = true/.test(appjs.slice(appjs.indexOf('function closeOverlays('))),
+  'closeOverlays (Esc) must also close the help window');
+// --- ⚙ settings are remembered; the sheet ends with the common "Clear saved data" row ---
+assert.ok(/const SETTINGS_KEY = 'click-to-get-coord\/settings'/.test(appjs), 'settings are saved under click-to-get-coord/settings');
+assert.ok(/function loadSettings\(/.test(appjs) && /function saveSettings\(/.test(appjs), 'app.js must load and save the settings');
+assert.ok(/function applySettingsFromSheet\([\s\S]*?saveSettings\(\)/.test(appjs)
+  && /function setDiameter\([\s\S]*?saveSettings\(\)/.test(appjs), 'every settings change is saved');
+assert.ok(ids.has('clearDataBtn') && html.indexOf('id="otherAppsLink"') < html.indexOf('id="clearDataBtn"')
+  && html.indexOf('id="clearDataBtn"') < html.indexOf('</section>', html.indexOf('id="settings-panel"')),
+  'the sheet ends with the Clear saved data row');
+assert.ok(/async function clearSavedData\([\s\S]*?showConfirm\(t\('c\.clearConfirm'\)/.test(appjs),
+  'Clear saved data asks first with the in-page dialog');
 for (const f of ['qr.svg', 'src-qr.svg']) {
-  assert.ok(html.includes(`src="${f}"`) && fs.existsSync(path.join(__dirname, f)), `${f} must be published`);
+  assert.ok(html.includes(`src="${f}"`) && fs.existsSync(path.join(ROOT, f)), `${f} must be published`);
 }
 
 // --- changelog matches the version -------------------------------------------
@@ -97,12 +128,13 @@ for (const m of read('source.js').matchAll(/srcText\('([\w.]+)'/g)) usedKeys.add
 for (const m of read('calib.js').matchAll(/warnings\.push\('([\w.]+)'\)/g)) usedKeys.add(m[1]);
 for (const k of usedKeys) assert.ok(ja.has(k), `UI uses the string key "${k}", which STRINGS does not define`);
 for (const k of ['c.settings', 'c.close', 'c.language', 'c.share', 'c.showQr', 'c.changelog',
-  'c.showChangelog', 'c.otherApps', 'c.openPortal', 'c.fullscreen']) {
+  'c.showChangelog', 'c.otherApps', 'c.openPortal', 'c.fullscreen', 'c.exitFullscreen', 'c.help',
+  'c.data', 'c.clearData', 'c.clearConfirm']) {
   assert.ok(ja.has(k), `common key ${k} missing`);
 }
 
 // --- stylesheet exists -------------------------------------------------------
 const css = html.match(/<link rel="stylesheet" href="([^"]+)"/);
-assert.ok(css && fs.existsSync(path.join(__dirname, css[1])), 'stylesheet missing');
+assert.ok(css && fs.existsSync(path.join(ROOT, css[1])), 'stylesheet missing');
 
 console.log('test_wiring.js: OK');

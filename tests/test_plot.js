@@ -1,7 +1,7 @@
-// node test_plot.js
+// node tests/test_plot.js
 'use strict';
 const assert = require('assert');
-const { niceTicks, tickLabel } = require('./plot.js');
+const { niceTicks, tickLabel } = require('../plot.js');
 
 {
   const { step, ticks } = niceTicks(0, 10, 5);
@@ -30,7 +30,7 @@ assert.strictEqual(tickLabel(0.5, 0.1), '0.5');
 console.log('test_plot.js: OK');
 
 // --- axis ranges -------------------------------------------------------------
-const { plotRanges } = require('./plot.js');
+const { plotRanges } = require('../plot.js');
 {
   // t/T on x (0..1) against degrees on y (-60..80): each axis must fit its own data,
   // otherwise x gets stretched to hundreds of units and the curve collapses to a line
@@ -62,7 +62,7 @@ const { plotRanges } = require('./plot.js');
 console.log('test_plot.js: axis ranges OK');
 
 // --- marker outline ----------------------------------------------------------
-const { markerEdgeWidth } = require('./plot.js');
+const { markerEdgeWidth } = require('../plot.js');
 {
   // the outline must scale with the marker, and stay a small fraction of it
   const r2 = markerEdgeWidth(2);   // the default diameter of 4

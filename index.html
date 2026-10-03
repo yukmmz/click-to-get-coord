@@ -5,6 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Click to Get Coord</title>
 <link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="description" content="Click points on a video or image and get real-world coordinates, calibrated from two reference points. No upload, no server.">
+<!-- Link previews (LINE / Slack / X). og:image must be an absolute URL. -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="Click to Get Coord">
+<meta property="og:description" content="Click points on a video or image and get real-world coordinates, calibrated from two reference points. No upload, no server.">
+<meta property="og:url" content="https://yukmmz.github.io/click-to-get-coord/">
+<meta property="og:image" content="https://yukmmz.github.io/click-to-get-coord/icon-192.png">
+<meta name="twitter:card" content="summary">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -43,9 +52,13 @@
   </div>
 
   <div class="group right">
-    <button id="btn-help" title="h" data-i18n="tb.help">ヘルプ (h)</button>
-    <button id="fullscreen-btn" class="btn btn-icon" type="button"
-            data-i18n-title="c.fullscreen" data-i18n-aria-label="c.fullscreen" title="全画面表示" aria-label="全画面表示">⛶</button>
+    <!-- Label and icon follow the state in syncFullscreenBtn(): corners out = expand, corners in = shrink -->
+    <button id="fullscreen-btn" class="btn btn-icon" type="button" title="全画面表示" aria-label="全画面表示">
+      <svg class="fs-icon fs-enter" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/></svg>
+      <svg class="fs-icon fs-exit" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4v5H4M15 4v5h5M20 15h-5v5M4 15h5v5"/></svg>
+    </button>
+    <button id="help-btn" class="btn btn-icon" type="button"
+            data-i18n-title="c.help" data-i18n-aria-label="c.help" title="使い方" aria-label="使い方">?</button>
     <button id="settings-btn" class="btn btn-icon" type="button" aria-expanded="false"
             data-i18n-title="c.settings" data-i18n-aria-label="c.settings" title="設定" aria-label="設定">⚙</button>
   </div>
@@ -59,9 +72,9 @@
 </div>
 
 <nav id="navbar">
-  <button id="btn-prev" disabled title="← / z">◀</button>
+  <button id="btn-prev" disabled data-i18n-aria-label="nav.prev" data-i18n-title="nav.prev" aria-label="前のフレーム（← / z）" title="前のフレーム（← / z）">◀</button>
   <span id="frame-label">- / -</span>
-  <button id="btn-next" disabled title="→ / x">▶</button>
+  <button id="btn-next" disabled data-i18n-aria-label="nav.next" data-i18n-title="nav.next" aria-label="次のフレーム（→ / x）" title="次のフレーム（→ / x）">▶</button>
   <label for="frame-step" class="label" data-i18n="nav.step" data-i18n-title="nav.stepTitle"
     title="◀ ▶ 1回で進むフレーム数。, で減らし . で増やす">送り幅</label>
   <input type="number" id="frame-step" min="1" max="10000" step="1" value="1" disabled
@@ -72,9 +85,9 @@
   <span class="sep"></span>
 
   <span class="label" data-i18n="nav.view">表示</span>
-  <button id="btn-zoom-out" disabled data-i18n-title="nav.zoomOut" title="縮小（- キー）">－</button>
+  <button id="btn-zoom-out" disabled data-i18n-title="nav.zoomOut" data-i18n-aria-label="nav.zoomOut" title="縮小（- キー）" aria-label="縮小（- キー）">－</button>
   <span id="zoom-label">100%</span>
-  <button id="btn-zoom-in" disabled data-i18n-title="nav.zoomIn" title="拡大（+ キー）">＋</button>
+  <button id="btn-zoom-in" disabled data-i18n-title="nav.zoomIn" data-i18n-aria-label="nav.zoomIn" title="拡大（+ キー）" aria-label="拡大（+ キー）">＋</button>
   <button id="btn-zoom-reset" disabled data-i18n="nav.fit" data-i18n-title="nav.fitTitle" title="全体表示に戻す（0 キー）">全体</button>
   <span class="hint" data-i18n="nav.gestures">ピンチ/Ctrl+ホイール=拡大縮小、2本指スクロール=移動</span>
 
@@ -152,7 +165,7 @@
   <div class="sheet-head">
     <h2 class="sheet-title" data-i18n="c.settings">設定</h2>
     <button id="settings-close" class="btn btn-icon" type="button"
-            data-i18n-aria-label="c.close" aria-label="閉じる">✕</button>
+            data-i18n-aria-label="c.close" data-i18n-title="c.close" aria-label="閉じる" title="閉じる">✕</button>
   </div>
 
   <div class="sheet-row">
@@ -223,6 +236,11 @@
     <a id="otherAppsLink" class="btn" href="https://yukmmz.github.io/" target="_blank" rel="noopener"
        data-i18n="c.openPortal">アプリ一覧を開く</a>
   </div>
+
+  <div class="sheet-row">
+    <span class="sheet-label" data-i18n="c.data">データ</span>
+    <button id="clearDataBtn" class="btn btn-danger" type="button" data-i18n="c.clearData">保存データを消す</button>
+  </div>
 </section>
 
 <!-- QR オーバーレイ: アプリURL（左）とソースリポジトリURL（右） -->
@@ -253,11 +271,15 @@
   </div>
 </div>
 
-<dialog id="dlg-help">
-  <!-- filled from STRINGS['help.body'] -->
-  <div data-i18n-html="help.body"></div>
-  <form method="dialog"><menu><button type="submit" value="ok" class="primary" data-i18n="c.close">閉じる</button></menu></form>
-</dialog>
+<!-- 使い方: header ? button, or the ? / h keys. Same look and closing as the changelog.
+     The body is filled from STRINGS['help.body']. -->
+<div id="helpOverlay" hidden>
+  <div class="qrcard changelog-card help-card" role="dialog" data-i18n-aria-label="c.help" aria-label="使い方">
+    <h2 class="changelog-title" data-i18n="c.help">使い方</h2>
+    <div class="changelog-list help-body" data-i18n-html="help.body"></div>
+    <button id="helpClose" class="btn" type="button" data-i18n="c.close">閉じる</button>
+  </div>
+</div>
 
 <input type="file" id="file-input" accept="video/*,image/*" multiple hidden>
 <input type="file" id="session-input" accept="application/json,.json" hidden>

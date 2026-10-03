@@ -1,7 +1,7 @@
-// node test_calib.js
+// node tests/test_calib.js
 'use strict';
 const assert = require('assert');
-const { computeTransform, pixelToReal, realToPixel } = require('./calib.js');
+const { computeTransform, pixelToReal, realToPixel } = require('../calib.js');
 
 // Real-world Y axis pointing up: image y grows downward, so scaleY must be negative.
 {

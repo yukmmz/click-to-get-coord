@@ -1,4 +1,4 @@
-// node test_e2e_chrome.js
+// node tests/test_e2e_chrome.js
 //
 // End-to-end test driven through the Chrome DevTools Protocol against the locally
 // installed Chrome. Node only, no npm packages and no other runtime: it serves the
@@ -12,8 +12,8 @@
 //
 // Writes scratch/e2e_*.png (screenshot and the rendered plot/overlay) for eyeballing.
 //
-//   node test_e2e_chrome.js          serve over http://127.0.0.1 (how GitHub Pages will serve it)
-//   node test_e2e_chrome.js --file   open index.html directly as file://, no server at all
+//   node tests/test_e2e_chrome.js          serve over http://127.0.0.1 (how GitHub Pages will serve it)
+//   node tests/test_e2e_chrome.js --file   open index.html directly as file://, no server at all
 
 'use strict';
 const { spawn } = require('child_process');
@@ -21,7 +21,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
-const ROOT = __dirname;
+const ROOT = path.join(__dirname, '..');
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const HTTP_PORT = 8765;
 const CDP_PORT = 9333;
@@ -343,6 +343,35 @@ ${PRELUDE}
   check('toolbar diameter updates the sheet box', els.setDiameter.value === '4', els.setDiameter.value);
   setSettingsOpen(false);
 
+  // --- settings are saved as they change and restored on the next visit ---
+  const savedNow = () => JSON.parse(localStorage.getItem(SETTINGS_KEY) || 'null');
+  check('a settings change is saved', savedNow() && savedNow().diameter === 4 && savedNow().markerEdge === true,
+    localStorage.getItem(SETTINGS_KEY));
+  check('frame PNGs are not saved (they follow the file type)', !('framePngs' in savedNow()));
+  const before = localStorage.getItem(SETTINGS_KEY);
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify({ diameter: 12, pointColor: '#123456', smooth: true, markerEdge: 'x' }));
+  loadSettings();
+  check('saved settings are restored', state.settings.diameter === 12 && state.settings.pointColor === '#123456'
+    && state.settings.smooth === true, JSON.stringify(state.settings));
+  check('a broken saved value keeps the current one', state.settings.markerEdge === true, state.settings.markerEdge);
+  localStorage.setItem(SETTINGS_KEY, '{not json');
+  loadSettings();
+  check('corrupt saved settings are ignored', state.settings.diameter === 12, state.settings.diameter);
+  localStorage.setItem(SETTINGS_KEY, before);
+  Object.assign(state.settings, JSON.parse(before));
+  setDiameter(state.settings.diameter);
+
+  // --- Clear saved data: asks with the in-page dialog; Cancel keeps everything ---
+  openSettings();
+  check('the sheet has the Clear saved data row', !!els.clearDataBtn && els.clearDataBtn.textContent === t('c.clearData'));
+  els.clearDataBtn.click();
+  await waitFor(() => els.dlgConfirm.open);
+  check('it asks first in the page dialog', els.dlgConfirm.open && els.confirmText.textContent === t('c.clearConfirm')
+    && els.settingsPanel.hidden);
+  els.confirmCancel.click();
+  await waitFor(() => !els.dlgConfirm.open);
+  check('Cancel keeps the saved data', localStorage.getItem(SETTINGS_KEY) === before);
+
   // --- point numbers take the point colour by default, and never white ---
   check('index colour follows the point colour by default',
     state.settings.indexColorAuto === true && indexColor() === state.settings.pointColor,
@@ -404,7 +433,42 @@ ${PRELUDE}
   els.qrBtn.click();
   els.qrClose.click();
   check('Close closes the QR overlay', els.qrOverlay.hidden);
+  // --- How to use: header ?, the ? and h keys; closes with Close / outside / Esc ---
+  check('the help button is the ? icon between ⛶ and ⚙', els.helpBtn.textContent === '?'
+    && els.helpBtn.compareDocumentPosition(els.fullscreenBtn) === Node.DOCUMENT_POSITION_PRECEDING
+    && els.helpBtn.nextElementSibling === els.settingsBtn
+    && els.helpBtn.title === '使い方');
+  els.helpBtn.click();
+  check('? button opens the help window', !els.helpOverlay.hidden
+    && els.helpOverlay.querySelector('h2').textContent === '使い方'
+    && els.helpOverlay.querySelector('.help-body').textContent.includes('キャリブレーションのやり直し'));
+  const helpBody = els.helpOverlay.querySelector('.help-body');
+  check('the help body scrolls inside the card', helpBody.scrollHeight > helpBody.clientHeight
+    && els.helpOverlay.querySelector('.help-card').getBoundingClientRect().bottom <= innerHeight,
+    helpBody.scrollHeight + ' / ' + helpBody.clientHeight);
+  els.helpClose.click();
+  check('Close closes the help window', els.helpOverlay.hidden);
+  key('?');
+  check('the ? key opens the help window', !els.helpOverlay.hidden);
+  key('Escape');
+  check('Esc closes the help window', els.helpOverlay.hidden);
+  key('h');
+  check('the h key opens the help window', !els.helpOverlay.hidden);
+  els.helpOverlay.click();
+  check('a click outside closes the help window', els.helpOverlay.hidden);
+  els.markerSize.dispatchEvent(new KeyboardEvent('keydown', { key: '?', bubbles: true }));
+  els.langSelect.dispatchEvent(new KeyboardEvent('keydown', { key: 'h', bubbles: true }));
+  check('? / h typed in an input or select do not open help', els.helpOverlay.hidden);
+  I18N.set('en');
+  els.helpBtn.click();
+  check('English help window', els.helpOverlay.querySelector('h2').textContent === 'How to use'
+    && helpBody.textContent.includes('Redoing the calibration') && els.helpBtn.title === 'How to use');
+  key('Escape');
+  I18N.set('ja');
   check('the full-screen button is shown where supported', els.fullscreenBtn.hidden === !document.documentElement.requestFullscreen);
+  check('the full-screen button shows the expand icon and label while windowed',
+    !els.fullscreenBtn.classList.contains('is-fullscreen') && els.fullscreenBtn.title === '全画面表示'
+    && getComputedStyle(els.fullscreenBtn.querySelector('.fs-exit')).display === 'none');
 
   // Calling the picker without a user gesture always fails; what matters is *why*.
   // "user gesture" => the API is usable here. "opaque origin"/"not allowed" => this
@@ -592,6 +656,9 @@ function cdp(ws, method, params = {}) {
   // The static server only exists to reach the files during this test — the app itself
   // is plain files with no server side. In --file mode nothing is served at all.
   const server = USE_FILE_URL ? null : startStaticServer();
+  // Start from a fresh browser profile: the app now remembers its settings in localStorage,
+  // and the checks below expect the defaults.
+  fs.rmSync(path.join(OUT_DIR, '.chrome-profile'), { recursive: true, force: true });
   const chrome = spawn(CHROME, [
     '--headless=new',
     `--remote-debugging-port=${CDP_PORT}`,

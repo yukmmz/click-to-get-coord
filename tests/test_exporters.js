@@ -1,11 +1,11 @@
-// node test_exporters.js
+// node tests/test_exporters.js
 // Also writes scratch/test_coords.mat so that scratch/verify_mat.py can check it with SciPy.
 'use strict';
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
-const { encodeMatV5 } = require('./matwriter.js');
-const { buildCsv, buildMatVars, buildSessionJson, buildReadme } = require('./exporters.js');
+const { encodeMatV5 } = require('../matwriter.js');
+const { buildCsv, buildMatVars, buildSessionJson, buildReadme } = require('../exporters.js');
 
 /** @type {any} */
 const dataset = {
@@ -90,7 +90,7 @@ assert.strictEqual(bytes[126], 0x49);
 assert.strictEqual(bytes[127], 0x4d);
 assert.strictEqual(new DataView(bytes.buffer).getUint16(124, true), 0x0100);
 
-const outDir = path.join(__dirname, 'scratch');
+const outDir = path.join(__dirname, '..', 'scratch');
 fs.mkdirSync(outDir, { recursive: true });
 fs.writeFileSync(path.join(outDir, 'test_coords.mat'), Buffer.from(bytes));
 
