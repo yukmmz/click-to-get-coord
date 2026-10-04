@@ -20,6 +20,8 @@ No upload, no server, no install — everything runs locally in the browser.
 - **Resume later** — reload `session.json` to continue where you left off
 - **Japanese / English UI** — follows the browser language; switch it in the settings (⚙).
   Only the screen is translated: the exported files are the same in either language
+- **Feedback (FB)** — the FB button at the top right opens a small form to send comments or a
+  bug report to the developer
 
 ## Usage
 
@@ -63,7 +65,7 @@ Three-finger scroll is consumed by macOS itself and never reaches the page.
 | `[` / `]` | Smaller / larger point markers |
 | `e` | Settings — same as ⚙ (colours, marker outline, smooth curve, plot aspect, …) |
 | `?` or `h` | How to use — same as the ? button at the top right |
-| `Esc` | Close the settings, the QR codes, the changelog or the help |
+| `Esc` | Close the settings, the QR codes, the changelog, the help or the feedback window |
 
 ### Re-calibrating part way through
 
@@ -113,6 +115,10 @@ in ⚙ (`click-to-get-coord/settings` — the per-frame PNG switch is not kept, 
 again each time you open files), the chosen language (`click-to-get-coord/lang`) and the last
 version whose changelog you have seen (`click-to-get-coord/seen-version`). **Clear saved data**
 at the bottom of the settings removes all of them. Videos, images and points are never stored.
+
+Nothing is sent anywhere, with one exception: when you press **Send** in the FB (feedback) window,
+what you wrote there is sent to the developer, together with the app name, version and display
+language. Your videos, images and points are never sent.
 
 ## Output
 

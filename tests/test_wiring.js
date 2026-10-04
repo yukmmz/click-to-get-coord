@@ -92,6 +92,22 @@ assert.ok(/function openHelp\(/.test(appjs) && /case 'h': case '\?': openHelp\(\
   'both h and ? open the help window');
 assert.ok(/els\.helpOverlay\.hidden = true/.test(appjs.slice(appjs.indexOf('function closeOverlays('))),
   'closeOverlays (Esc) must also close the help window');
+// --- common FB (feedback) button: [⛶][FB][?][⚙], opens #feedbackOverlay ---
+for (const id of ['feedback-btn', 'feedbackOverlay', 'feedbackForm', 'feedbackMessage', 'feedbackContact',
+  'feedbackWebsite', 'feedbackStatus', 'feedbackSend', 'feedbackClose']) {
+  assert.ok(ids.has(id), `index.html must define #${id} for the common feedback window`);
+}
+assert.ok(/<button id="feedback-btn" class="btn btn-icon"[^>]*data-i18n-title="c\.feedback"[^>]*><span class="fb-mark" aria-hidden="true">FB<\/span><\/button>/.test(html),
+  'the feedback button is the common FB icon button');
+assert.ok(html.indexOf('id="fullscreen-btn"') < html.indexOf('id="feedback-btn"')
+  && html.indexOf('id="feedback-btn"') < html.indexOf('id="help-btn"'), 'FB sits between ⛶ and ?');
+assert.ok(/els\.feedbackOverlay\.hidden = true/.test(appjs.slice(appjs.indexOf('function closeOverlays(')))
+  && /!els\.feedbackOverlay\.hidden/.test(appjs.slice(appjs.indexOf('function anyOverlayOpen('))),
+  'closeOverlays (Esc) and anyOverlayOpen must include the feedback window');
+assert.ok(/const FEEDBACK_APP_ID = 'click-to-get-coord'/.test(appjs) && /const FEEDBACK_URL = 'https:\/\/script\.google\.com\//.test(appjs),
+  'feedback goes to the shared endpoint as click-to-get-coord');
+assert.ok(/function sendFeedback\([\s\S]*?'Content-Type': 'text\/plain;charset=utf-8'[\s\S]*?app: FEEDBACK_APP_ID, version: APP_VERSION, lang:/.test(appjs),
+  'sendFeedback posts text/plain with app, version and lang');
 // --- ⚙ settings are remembered; the sheet ends with the common "Clear saved data" row ---
 assert.ok(/const SETTINGS_KEY = 'click-to-get-coord\/settings'/.test(appjs), 'settings are saved under click-to-get-coord/settings');
 assert.ok(/function loadSettings\(/.test(appjs) && /function saveSettings\(/.test(appjs), 'app.js must load and save the settings');
@@ -129,7 +145,9 @@ for (const m of read('calib.js').matchAll(/warnings\.push\('([\w.]+)'\)/g)) used
 for (const k of usedKeys) assert.ok(ja.has(k), `UI uses the string key "${k}", which STRINGS does not define`);
 for (const k of ['c.settings', 'c.close', 'c.language', 'c.share', 'c.showQr', 'c.changelog',
   'c.showChangelog', 'c.otherApps', 'c.openPortal', 'c.fullscreen', 'c.exitFullscreen', 'c.help',
-  'c.data', 'c.clearData', 'c.clearConfirm']) {
+  'c.data', 'c.clearData', 'c.clearConfirm', 'c.feedback', 'c.feedbackLead', 'c.feedbackMessage',
+  'c.feedbackPlaceholder', 'c.feedbackContact', 'c.feedbackNote', 'c.feedbackSend', 'c.feedbackSending',
+  'c.feedbackThanks', 'c.feedbackEmpty', 'c.feedbackError']) {
   assert.ok(ja.has(k), `common key ${k} missing`);
 }
 

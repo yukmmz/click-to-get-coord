@@ -12,7 +12,12 @@
 /* Single source of truth for the version; session.json records it. The app and source
  * URLs are APP_URL / SOURCE_URL in exporters.js (shared global scope of the classic
  * scripts), and the QR images (qr.svg / src-qr.svg) encode those same URLs. */
-const APP_VERSION = '1.2.0';
+const APP_VERSION = '1.3.0';
+
+/* Shared feedback endpoint (Google Apps Script web app, one for every yukmmz.github.io app).
+ * Public on purpose: it can only append a row to a sheet and post to a Discord channel. */
+const FEEDBACK_URL = 'https://script.google.com/macros/s/AKfycbxFJ-rTK2e5h05r6_j0RJJu-1Fo4Or3nsAnYcnGXC2i9I8FEdOIbNaXI1BfjunkQHEP/exec';
+const FEEDBACK_APP_ID = 'click-to-get-coord';
 
 const LANG_KEY = 'click-to-get-coord/lang';
 const SEEN_VERSION_KEY = 'click-to-get-coord/seen-version';
@@ -25,6 +30,10 @@ const STORAGE_PREFIX = 'click-to-get-coord/';
  * to the app name. Bumping APP_VERSION means adding an entry here (test_wiring.js checks
  * that the first entry matches). Written for users, in both languages. */
 const CHANGELOG = [
+  { version: '1.3.0', date: '2026-10-04', items: [
+    { ja: 'ヘッダーに「FB」ボタンを追加しました。ご意見・不具合の報告を開発者に送れます',
+      en: 'New "FB" button in the header: send feedback or a bug report to the developer' },
+  ] },
   { version: '1.2.0', date: '2026-10-01', items: [
     { ja: '使い方を上部の ? ボタンに移しました（? キーや h キーでも開きます）',
       en: 'How to use moved to the ? button at the top (the ? and h keys open it too)' },
@@ -64,6 +73,12 @@ const STRINGS = {
     'c.otherApps': '他のアプリ', 'c.openPortal': 'アプリ一覧を開く', 'c.fullscreen': '全画面表示',
     'c.help': '使い方', 'c.exitFullscreen': '全画面を終了',
     'c.data': 'データ', 'c.clearData': '保存データを消す',
+    'c.feedback': 'フィードバックを送る', 'c.feedbackLead': 'ご意見・ご要望・不具合の報告をお寄せください。',
+    'c.feedbackMessage': 'フィードバックの内容', 'c.feedbackPlaceholder': '使ってみた感想、困ったこと、ほしい機能など',
+    'c.feedbackContact': '連絡先（任意・返信がほしい場合）',
+    'c.feedbackNote': '送信を押したときに、書いた内容とアプリ名・バージョン・表示言語だけを開発者に送ります。',
+    'c.feedbackSend': '送信', 'c.feedbackSending': '送信中…', 'c.feedbackThanks': '送信しました。ありがとうございます！',
+    'c.feedbackEmpty': '内容を入力してください。', 'c.feedbackError': '送信できませんでした。時間をおいてもう一度お試しください。',
     'c.clearConfirm': 'このブラウザに保存されている、このアプリのデータ（設定の点の直径・色・表示の切り替え、言語、更新履歴の既読）をすべて消して、ページを読み込み直します。'
       + 'クリックした点とキャリブレーションはもともと保存されないので、書き出していない点は失われます。元に戻せません。よろしいですか？',
 
@@ -271,7 +286,7 @@ const STRINGS = {
   <tr><td>[ / ]</td><td>点の直径を小さく / 大きく</td></tr>
   <tr><td>e</td><td>設定（⚙ と同じ。変更はその場で反映）</td></tr>
   <tr><td>? / h</td><td>この使い方（上部の ? ボタンと同じ）</td></tr>
-  <tr><td>Esc</td><td>設定・QR コード・更新履歴・使い方を閉じる</td></tr>
+  <tr><td>Esc</td><td>設定・QR コード・更新履歴・使い方・フィードバックの窓を閉じる</td></tr>
 </table>
 
 <h3>「作業を再開」とは</h3>
@@ -304,6 +319,12 @@ const STRINGS = {
     'c.otherApps': 'Other apps', 'c.openPortal': 'Open app list', 'c.fullscreen': 'Full screen',
     'c.help': 'How to use', 'c.exitFullscreen': 'Exit full screen',
     'c.data': 'Data', 'c.clearData': 'Clear saved data',
+    'c.feedback': 'Send feedback', 'c.feedbackLead': 'Comments, requests and bug reports are welcome.',
+    'c.feedbackMessage': 'Your feedback', 'c.feedbackPlaceholder': 'What you liked, what was hard, what you would like to see…',
+    'c.feedbackContact': 'Contact (optional, if you would like a reply)',
+    'c.feedbackNote': 'Only what you write, plus the app name, version and display language, is sent to the developer when you press Send.',
+    'c.feedbackSend': 'Send', 'c.feedbackSending': 'Sending…', 'c.feedbackThanks': 'Sent. Thank you!',
+    'c.feedbackEmpty': 'Please write something first.', 'c.feedbackError': 'Could not send. Please try again later.',
     'c.clearConfirm': 'This deletes everything this app has saved in this browser (the settings: marker size, colours and display toggles; the language; which changelog you have read) and reloads the page. '
       + 'Clicked points and the calibration are never saved, so any points you have not exported will be lost. This cannot be undone. Continue?',
 
@@ -511,7 +532,7 @@ const STRINGS = {
   <tr><td>[ / ]</td><td>Smaller / larger points</td></tr>
   <tr><td>e</td><td>Settings (same as ⚙; changes apply immediately)</td></tr>
   <tr><td>? / h</td><td>This help (same as the ? button at the top)</td></tr>
-  <tr><td>Esc</td><td>Close the settings, QR codes, changelog or this help</td></tr>
+  <tr><td>Esc</td><td>Close the settings, QR codes, changelog, feedback window or this help</td></tr>
 </table>
 
 <h3>What "Resume" does</h3>
@@ -581,6 +602,15 @@ const els = {
   helpBtn: /** @type {HTMLButtonElement} */ (document.getElementById('help-btn')),
   helpOverlay: /** @type {HTMLElement} */ (document.getElementById('helpOverlay')),
   helpClose: /** @type {HTMLButtonElement} */ (document.getElementById('helpClose')),
+  feedbackBtn: /** @type {HTMLButtonElement} */ (document.getElementById('feedback-btn')),
+  feedbackOverlay: /** @type {HTMLElement} */ (document.getElementById('feedbackOverlay')),
+  feedbackForm: /** @type {HTMLFormElement} */ (document.getElementById('feedbackForm')),
+  feedbackMessage: /** @type {HTMLTextAreaElement} */ (document.getElementById('feedbackMessage')),
+  feedbackContact: /** @type {HTMLInputElement} */ (document.getElementById('feedbackContact')),
+  feedbackWebsite: /** @type {HTMLInputElement} */ (document.getElementById('feedbackWebsite')),
+  feedbackStatus: /** @type {HTMLElement} */ (document.getElementById('feedbackStatus')),
+  feedbackSend: /** @type {HTMLButtonElement} */ (document.getElementById('feedbackSend')),
+  feedbackClose: /** @type {HTMLButtonElement} */ (document.getElementById('feedbackClose')),
   appVersion: /** @type {HTMLElement} */ (document.getElementById('app-version')),
   fullscreenBtn: /** @type {HTMLButtonElement} */ (document.getElementById('fullscreen-btn')),
   settingsBtn: /** @type {HTMLButtonElement} */ (document.getElementById('settings-btn')),
@@ -1771,19 +1801,20 @@ function openSettings() {
   setSettingsOpen(true);
 }
 
-/** Close the settings sheet and the QR / changelog / help overlays. @returns {boolean} whether any was open */
+/** Close the settings sheet and the QR / changelog / help / feedback overlays. @returns {boolean} whether any was open */
 function closeOverlays() {
   const wasOpen = anyOverlayOpen();
   setSettingsOpen(false);
   els.qrOverlay.hidden = true;
   els.changelogOverlay.hidden = true;
   els.helpOverlay.hidden = true;
+  els.feedbackOverlay.hidden = true;
   return wasOpen;
 }
 
 function anyOverlayOpen() {
   return !els.settingsPanel.hidden || !els.qrOverlay.hidden || !els.changelogOverlay.hidden
-    || !els.helpOverlay.hidden;
+    || !els.helpOverlay.hidden || !els.feedbackOverlay.hidden;
 }
 
 /** The "How to use" window, opened by the header ? button or the ? / h keys. */
@@ -1792,6 +1823,51 @@ function openHelp() {
   els.helpOverlay.hidden = false;
   const body = els.helpOverlay.querySelector('.help-body');
   if (body) body.scrollTop = 0;
+}
+
+// --- feedback (header FB button) ---------------------------------------------
+
+/** The feedback window, opened by the header FB button. */
+function openFeedback() {
+  closeOverlays();
+  els.feedbackStatus.textContent = '';
+  els.feedbackStatus.className = 'feedback-status';
+  els.feedbackOverlay.hidden = false;
+  els.feedbackMessage.focus();
+}
+
+/** @param {string} key @param {string} kind '' | 'ok' | 'err' */
+function setFeedbackStatus(key, kind) {
+  els.feedbackStatus.textContent = t(key);
+  els.feedbackStatus.className = 'feedback-status' + (kind ? ' ' + kind : '');
+}
+
+/** Post the message to the shared GAS endpoint. Sent as text/plain so the
+ * browser makes a "simple" request: GAS cannot answer a CORS preflight.
+ * @param {Event} event */
+function sendFeedback(event) {
+  event.preventDefault();
+  const message = els.feedbackMessage.value.trim();
+  if (!message) { setFeedbackStatus('c.feedbackEmpty', 'err'); return; }
+  els.feedbackSend.disabled = true;
+  setFeedbackStatus('c.feedbackSending', '');
+  fetch(FEEDBACK_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({
+      app: FEEDBACK_APP_ID, version: APP_VERSION, lang: /** @type {any} */ (window).I18N.lang(), message,
+      contact: els.feedbackContact.value.trim(), website: els.feedbackWebsite.value,
+    }),
+  }).then((res) => res.json()).then((res) => {
+    if (!res || !res.ok) throw new Error(res && res.error);
+    els.feedbackMessage.value = '';
+    els.feedbackContact.value = '';
+    setFeedbackStatus('c.feedbackThanks', 'ok');
+  }).catch(() => {
+    setFeedbackStatus('c.feedbackError', 'err');
+  }).then(() => {
+    els.feedbackSend.disabled = false;
+  });
 }
 
 // --- changelog ---------------------------------------------------------------
@@ -1955,6 +2031,14 @@ els.helpBtn.addEventListener('click', openHelp);
 els.helpClose.addEventListener('click', () => { els.helpOverlay.hidden = true; });
 els.helpOverlay.addEventListener('click', (e) => {
   if (e.target === els.helpOverlay) els.helpOverlay.hidden = true;
+});
+// Feedback: the same closing rules; Esc inside its fields is handled by the global
+// keydown handler, which runs closeOverlays() before it ignores keys typed into fields.
+els.feedbackBtn.addEventListener('click', openFeedback);
+els.feedbackForm.addEventListener('submit', sendFeedback);
+els.feedbackClose.addEventListener('click', () => { els.feedbackOverlay.hidden = true; });
+els.feedbackOverlay.addEventListener('click', (e) => {
+  if (e.target === els.feedbackOverlay) els.feedbackOverlay.hidden = true;
 });
 
 // Cancel buttons are type="button" on purpose: that leaves OK as the only submit button

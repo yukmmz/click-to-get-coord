@@ -343,6 +343,17 @@ dialog ol, dialog ul { margin: 6px 0; padding-left: 22px; font-size: 14px; }
 }
 
 #help-btn { font-size: 1.35rem; font-weight: 700; }
+/* "FB" packed edge to edge inside the 36x36 key: bold, squeezed sideways, no extra spacing.
+   Buttons here use the browser default (Arial); the reference font keeps the mark 23px wide. */
+#feedback-btn .fb-mark {
+  font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Segoe UI", Roboto, sans-serif;
+  display: inline-block;
+  font-size: 1.44rem;
+  font-weight: 384;
+  letter-spacing: -.05em;
+  line-height: 1;
+  transform: scaleX(.74);
+}
 #fullscreen-btn[hidden] { display: none; }
 /* Full-screen icon: corners out to expand, corners in (while full screen) to shrink */
 .fs-icon {
@@ -455,7 +466,8 @@ label.sheet-row { cursor: pointer; }
 
 #qrOverlay,
 #changelogOverlay,
-#helpOverlay {
+#helpOverlay,
+#feedbackOverlay {
   position: fixed;
   inset: 0;
   z-index: 60;
@@ -577,3 +589,28 @@ label.sheet-row { cursor: pointer; }
   border-radius: 50%;
   background: var(--danger);
 }
+
+/* ---------- feedback overlay (FB): the changelog card holding a small form ---------- */
+
+.feedback-card { gap: 8px; }
+.feedback-lead, .feedback-note { margin: 0; font-size: .85rem; color: var(--muted); }
+.feedback-message, .feedback-contact {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  font-size: .95rem;
+  padding: 8px 10px;
+  border: 1px solid #4d4d4d;
+  border-radius: 10px;
+  background: #1b1b1b;
+  color: var(--text);
+}
+.feedback-message { resize: vertical; min-height: 120px; }
+.feedback-hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+.feedback-status { margin: 0; min-height: 1.2em; font-size: .85rem; font-weight: 700; }
+.feedback-status.ok { color: #4ade80; }
+.feedback-status.err { color: var(--danger); }
+.feedback-actions { display: flex; gap: 8px; justify-content: flex-end; }
+#feedbackSend { background: #2f6feb; border-color: #2f6feb; color: #fff; }
+#feedbackSend:hover:not(:disabled) { background: #4680f0; }
+#feedbackSend:disabled { opacity: .6; }

@@ -465,6 +465,29 @@ ${PRELUDE}
     && helpBody.textContent.includes('Redoing the calibration') && els.helpBtn.title === 'How to use');
   key('Escape');
   I18N.set('ja');
+  // --- FB (feedback): header button left of ?, empty send warns, Esc closes (also from a field) ---
+  // Never send a real message here: it would reach the developer's sheet and Discord.
+  check('the FB button sits between ⛶ and ?, same size as ?', els.feedbackBtn.nextElementSibling === els.helpBtn
+    && els.feedbackBtn.compareDocumentPosition(els.fullscreenBtn) === Node.DOCUMENT_POSITION_PRECEDING
+    && els.feedbackBtn.offsetWidth === els.helpBtn.offsetWidth && els.feedbackBtn.offsetHeight === els.helpBtn.offsetHeight
+    && els.feedbackBtn.title === 'フィードバックを送る');
+  els.feedbackBtn.click();
+  check('FB opens the feedback window', !els.feedbackOverlay.hidden && document.activeElement === els.feedbackMessage
+    && els.feedbackOverlay.querySelector('h2').textContent === 'フィードバックを送る');
+  els.feedbackMessage.value = '   ';
+  els.feedbackSend.click();
+  check('an empty message is not sent', els.feedbackStatus.textContent === STRINGS.ja['c.feedbackEmpty']
+    && els.feedbackStatus.classList.contains('err') && !els.feedbackSend.disabled);
+  els.feedbackMessage.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  check('Esc inside the message closes the feedback window', els.feedbackOverlay.hidden);
+  els.feedbackBtn.click();
+  check('reopening clears the old status', els.feedbackStatus.textContent === '');
+  els.feedbackOverlay.click();
+  check('a click outside closes the feedback window', els.feedbackOverlay.hidden);
+  I18N.set('en');
+  check('English FB label', els.feedbackBtn.title === 'Send feedback'
+    && els.feedbackMessage.placeholder === STRINGS.en['c.feedbackPlaceholder']);
+  I18N.set('ja');
   check('the full-screen button is shown where supported', els.fullscreenBtn.hidden === !document.documentElement.requestFullscreen);
   check('the full-screen button shows the expand icon and label while windowed',
     !els.fullscreenBtn.classList.contains('is-fullscreen') && els.fullscreenBtn.title === '全画面表示'
