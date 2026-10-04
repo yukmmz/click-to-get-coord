@@ -350,6 +350,7 @@ dialog ol, dialog ul { margin: 6px 0; padding-left: 22px; font-size: 14px; }
   --card: #262626;
   --border: #3a3a3a;
   --text: #eee;
+  --bg: #1b1b1b;
   --muted: #9a9a9a;
   --danger: #ff6b6b;
   --radius: 16px;
@@ -657,3 +658,20 @@ label.sheet-row { cursor: pointer; }
 #feedbackSend { background: #2f6feb; border-color: #2f6feb; color: #fff; }
 #feedbackSend:hover:not(:disabled) { background: #4680f0; }
 #feedbackSend:disabled { opacity: .6; }
+
+/* ---------- quick tooltip (common spec 10): mouse only, 0.5 s; inverted colours ---------- */
+.quick-tip {
+  position: fixed;
+  z-index: 100;  /* above the overlays (60) */
+  max-width: 260px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--text);
+  color: var(--bg);
+  font-size: .8rem;
+  line-height: 1.4;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: var(--shadow-run);
+}
+.quick-tip[hidden] { display: none; }

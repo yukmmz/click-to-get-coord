@@ -12,7 +12,7 @@
 /* Single source of truth for the version; session.json records it. The app and source
  * URLs are APP_URL / SOURCE_URL in exporters.js (shared global scope of the classic
  * scripts), and the QR images (qr.svg / src-qr.svg) encode those same URLs. */
-const APP_VERSION = '1.4.0';
+const APP_VERSION = '1.5.0';
 
 /* Shared feedback endpoint (Google Apps Script web app, one for every yukmmz.github.io app).
  * Public on purpose: it can only append a row to a sheet and post to a Discord channel. */
@@ -30,6 +30,10 @@ const STORAGE_PREFIX = 'click-to-get-coord/';
  * to the app name. Bumping APP_VERSION means adding an entry here (test_wiring.js checks
  * that the first entry matches). Written for users, in both languages. */
 const CHANGELOG = [
+  { version: '1.5.0', date: '2026-10-05', items: [
+    { ja: 'ボタンにマウスを乗せたときの説明が、すぐ（0.5秒で）出るようにしました',
+      en: 'Button hints now appear quickly (after 0.5 s) when you hover with the mouse' },
+  ] },
   { version: '1.4.0', date: '2026-10-05', items: [
     { ja: 'ご要望を受けて、キャリブレーションを3点でもできるようにしました。2点目が1点目と x か y の一方しか違わないときは、足りない方が違う3点目を案内します（例: 原点・x 軸上の点・y 軸上の点）',
       en: 'By request, calibration now also works with three points. If point 2 differs from point 1 in only x or only y, you are asked for a third point that differs in the other (e.g. the origin, a point on the x axis and a point on the y axis)' },
@@ -2550,6 +2554,73 @@ window.addEventListener('beforeunload', (e) => {
   e.returnValue = '';
 });
 
+// Quick tooltips (common spec 10): the browser's own `title` tooltip waits about 1-2 s, too slow
+// for icon-only buttons. For a mouse pointer, show the element's `title` in our own bubble after
+// TIP_DELAY_MS instead. The `title` is lifted into data-tip while hovering (so the native tooltip
+// never appears) and put back on leave, so i18n.js can keep rewriting `title` on a language switch.
+// Touch and pen are left alone (no hover there). The bubble has pointer-events: none and hides on
+// pointerdown, so it never gets in the way of clicks on the canvas.
+const TIP_DELAY_MS = 500;
+
+function initQuickTips() {
+  if (!document.body || typeof document.createElement !== 'function') return;  // headless test stubs
+  const bubble = document.createElement('div');
+  bubble.className = 'quick-tip';
+  bubble.setAttribute('role', 'tooltip');
+  bubble.hidden = true;
+  document.body.appendChild(bubble);
+  /** @type {HTMLElement | null} */
+  let target = null;
+  let timer = 0;
+
+  function place() {
+    if (!target) return;
+    const r = target.getBoundingClientRect();
+    const b = bubble.getBoundingClientRect();
+    const left = Math.min(Math.max(8, r.left + r.width / 2 - b.width / 2), window.innerWidth - b.width - 8);
+    let top = r.bottom + 6;
+    if (top + b.height > window.innerHeight - 8) top = r.top - b.height - 6;  // no room below
+    bubble.style.left = left + 'px';
+    bubble.style.top = top + 'px';
+  }
+
+  function hide() {
+    clearTimeout(timer);
+    bubble.hidden = true;
+    if (target) {
+      // put the title back unless something (i18n) already set a fresh one
+      if (!target.hasAttribute('title')) target.setAttribute('title', target.dataset.tip || '');
+      delete target.dataset.tip;
+      target = null;
+    }
+  }
+
+  document.addEventListener('pointerover', (e) => {
+    if (e.pointerType !== 'mouse') return;
+    const el = /** @type {HTMLElement | null} */ (
+      e.target instanceof Element ? e.target.closest('[title], [data-tip]') : null);
+    if (el === target) return;
+    hide();
+    if (!el || !el.getAttribute('title')) return;
+    target = el;
+    target.dataset.tip = target.getAttribute('title') || '';
+    target.removeAttribute('title');
+    timer = window.setTimeout(() => {
+      if (!target || !document.contains(target)) return;
+      bubble.textContent = target.dataset.tip || '';
+      bubble.hidden = false;
+      place();
+    }, TIP_DELAY_MS);
+  });
+  document.addEventListener('pointerout', (e) => {
+    if (target && !(e.relatedTarget instanceof Node && target.contains(e.relatedTarget))) hide();
+  });
+  document.addEventListener('pointerdown', hide, true);
+  document.addEventListener('keydown', hide, true);
+  window.addEventListener('scroll', hide, true);
+  window.addEventListener('blur', hide);
+}
+
 // --- startup -----------------------------------------------------------------
 
 // Before any text is produced: fills every data-i18n* element in the document.
@@ -2565,6 +2636,7 @@ initSeenVersion();
 buildChangelog();
 syncNewsMark();
 initFullscreen();
+initQuickTips();
 
 log(t('log.welcome', { v: APP_VERSION }));
 setStatus('status.ready');
