@@ -139,13 +139,69 @@ ${PRELUDE}
   check('cancelled calibration point is discarded', state.pendingCalib.img.length === 0,
     state.pendingCalib.img.length);
 
+  // --- recording points before any calibration asks first ---
+  key('a');
+  const askedFirst = await waitFor(() => els.dlgConfirm.open);
+  check('going to Add without a calibration asks first', askedFirst
+    && els.confirmCancel.textContent === 'キャリブレーションに戻る', els.confirmCancel.textContent);
+  els.confirmCancel.click();
+  await waitFor(() => !els.dlgConfirm.open);
+  check('"back to calibration" stays in calibration mode', state.mode === 'calib', state.mode);
+
+  // --- three-point calibration: origin, a point on the x axis, a point on the y axis ---
+  // a point that adds no new x or y value is refused and must be clicked again
+  const fillRejected = async (ix, iy, x, y) => {
+    clickAt(ix, iy);
+    if (!await waitFor(() => els.dlgCalib.open)) throw new Error('calibration dialog did not open');
+    els.calibX.value = String(x);
+    els.calibY.value = String(y);
+    els.dlgCalib.querySelector('button.primary').click();
+    await waitFor(() => !els.dlgCalib.open);
+    return waitFor(() => state.awaitingCalibInput === 0 && state.calibRetry);
+  };
+  clickAt(100, 500); await fillCalib(0, 0);
+  check('the guide bar has the Calibration colour', els.guide.className === 'mode-calib', els.guide.className);
+  check('point 2 may differ in x or y', els.guideText.textContent.includes('少なくとも x か y'), els.guideText.textContent);
+  check('point 2 with the same x and y is refused', await fillRejected(400, 300, 0, 0)
+    && state.pendingCalib.img.length === 1 && els.guide.classList.contains('warn'), els.guideText.textContent);
+  clickAt(700, 505); await fillCalib(12, 0);
+  check('only x differs: no calibration yet, a third point is asked for',
+    state.transform === null && state.pendingCalib.img.length === 2 && els.guideText.textContent.includes('y 座標が異なる点'),
+    els.guideText.textContent);
+  check('the dialog for point 3 names the missing axis', calibStepKey('calib.note', 3) === 'calib.note3y');
+  check('point 3 with the same y is refused', await fillRejected(400, 500, 6, 0)
+    && state.pendingCalib.img.length === 2 && els.guideText.textContent.includes('y 座標が異なる点をクリックし直して'),
+    els.guideText.textContent);
+  clickAt(105, 100); await fillCalib(0, 9);
+  check('"Calibration OK" shows once confirmed', !els.calibOk.hidden && els.guide.classList.contains('ok')
+    && els.guideText.textContent === 'キャリブレーション OK', els.guideText.textContent);
+  check('three points complete the calibration', state.transform !== null && state.calibImg.length === 3
+    && state.mode === 'add', 'img=' + state.calibImg.length + ' mode=' + state.mode);
+  if (state.calibImg.length === 3) {
+    const c3 = state.calibImg;
+    check('x scale comes from the origin and the x-axis point',
+      Math.abs(state.transform.scaleX - 12 / (c3[1].x - c3[0].x)) < 1e-12, state.transform.scaleX);
+    check('y scale comes from the origin and the y-axis point',
+      Math.abs(state.transform.scaleY - 9 / (c3[2].y - c3[0].y)) < 1e-12, state.transform.scaleY);
+    const o = pixelToReal(state.transform, c3[0].x, c3[0].y);
+    check('the origin maps to (0, 0)', Math.abs(o.x) < 1e-12 && Math.abs(o.y) < 1e-12, o.x + ',' + o.y);
+    const mat = buildMatVars(buildDataset());
+    check('the export carries all three calibration points', mat.calib_img.rows === 3 && mat.calib_real.rows === 3,
+      mat.calib_img.rows);
+  }
+  key('a');
+  check('with a calibration in force, Add needs no confirmation', !els.dlgConfirm.open && state.mode === 'add', state.mode);
+
   // calibration: (100,500)->(0,0) and (700,100)->(12,9)
+  enterCalibMode();
   await calibrate(100, 500, [0, 0], 700, 100, [12, 9]);
   check('two calibration pairs recorded', state.calibImg.length === 2 && state.calibReal.length === 2,
     'img=' + state.calibImg.length + ' real=' + state.calibReal.length + ' mode=' + state.mode);
   check('transform built', state.transform !== null);
   if (!state.transform) return JSON.stringify(out);
-  check('guide bar moved on to adding points', els.guideStep.textContent === 'STEP 3', els.guideStep.textContent);
+  check('guide bar moved on to adding points after "Calibration OK"',
+    await waitFor(() => els.guideStep.textContent === 'STEP 3', 3000) && els.calibOk.hidden, els.guideStep.textContent);
+  check('the guide bar is green in Add mode', els.guide.classList.contains('mode-add'), els.guide.className);
   // MouseEventInit.clientX is a long, so a synthesized click lands within ~1 display px
   // of the intended spot; verify against the pixels the app actually recorded.
   const ci = state.calibImg;
@@ -173,6 +229,7 @@ ${PRELUDE}
 
   enterDelMode();
   check('guide bar explains delete mode', els.guideStep.textContent === 'DELETE', els.guideStep.textContent);
+  check('the guide bar has the Delete colour', els.guide.className === 'mode-del', els.guide.className);
   clickAt(210, 405);
   check('nearest point deleted', state.framesRaw[1].length === 0, state.framesRaw[1].length);
   enterAddMode();
@@ -224,6 +281,64 @@ ${PRELUDE}
   enterCalibMode();
   await calibrate(100, 500, [0, 0], 700, 100, [12, 9]);
   state.framesRaw[0] = state.framesRaw[0].slice(0, beforeRecal.points - 1);
+
+  // --- rulers: add, drag, delete; never exported ---
+  {
+    const toClient = (axis, pos) => {
+      const r = els.canvas.getBoundingClientRect();
+      return axis === 'h'
+        ? { clientX: r.left + r.width / 2, clientY: r.top + state.view.ty + pos * state.view.scale }
+        : { clientX: r.left + state.view.tx + pos * state.view.scale, clientY: r.top + r.height / 2 };
+    };
+    const mouse = (target, type, init) => target.dispatchEvent(new MouseEvent(type,
+      Object.assign({ bubbles: true, cancelable: true, button: type === 'contextmenu' ? 2 : 0 }, init)));
+    key('r'); key('v');
+    check('r and v add a horizontal and a vertical ruler',
+      state.rulers.length === 2 && state.rulers[0].axis === 'h' && state.rulers[1].axis === 'v', JSON.stringify(state.rulers));
+    check('ruler editing is off by default', !state.rulerEdit && els.rulerEdit.getAttribute('aria-pressed') === 'false');
+    {
+      // a click right on a locked ruler records a point and does not grab the line
+      const n0 = state.framesRaw[state.frameIndex].length;
+      const onLine = toClient('h', state.rulers[0].pos);
+      mouse(els.canvas, 'mousedown', onLine);
+      mouse(els.canvas, 'mouseup', onLine);
+      mouse(els.canvas, 'click', onLine);
+      check('a click on a locked ruler adds a point', state.framesRaw[state.frameIndex].length === n0 + 1 && !state.rulerDrag,
+        state.framesRaw[state.frameIndex].length);
+      state.framesRaw[state.frameIndex] = state.framesRaw[state.frameIndex].slice(0, n0);
+      mouse(els.canvas, 'contextmenu', onLine);
+      check('right-clicking a locked ruler shows no delete button', els.rulerMenu.hidden);
+    }
+    key('f');
+    check('f turns ruler editing on', state.rulerEdit && els.rulerEdit.classList.contains('active'));
+    check('a ruler shows its real-world position', /^y = -?[0-9.]+$/.test(rulerLabel(state.rulers[0])), rulerLabel(state.rulers[0]));
+    // drag the horizontal ruler to image y = 300; the click that ends the drag adds no point
+    const pointsBefore = totalPoints(state.framesRaw);
+    const from = toClient('h', state.rulers[0].pos);
+    mouse(els.canvas, 'mousedown', from);
+    const to = toClient('h', 300);
+    mouse(window, 'mousemove', to);
+    mouse(els.canvas, 'mouseup', to);
+    mouse(els.canvas, 'click', to);
+    check('dragging moves the ruler', Math.abs(state.rulers[0].pos - 300) < 1, state.rulers[0].pos);
+    check('the drag adds no point', totalPoints(state.framesRaw) === pointsBefore, totalPoints(state.framesRaw));
+    check('the label follows the calibration',
+      rulerLabel(state.rulers[0]) === 'y = ' + fmtRuler(pixelToReal(state.transform, 0, state.rulers[0].pos).y), rulerLabel(state.rulers[0]));
+    // right-click shows the delete button; pressing it removes that ruler
+    mouse(els.canvas, 'contextmenu', toClient('v', state.rulers[1].pos));
+    check('right-clicking a ruler shows the delete button', !els.rulerMenu.hidden && els.rulerMenu.textContent === 'このルーラーを削除');
+    els.rulerMenu.click();
+    check('the delete button removes that ruler', state.rulers.length === 1 && state.rulers[0].axis === 'h' && els.rulerMenu.hidden,
+      JSON.stringify(state.rulers));
+    // dragging off the stage removes it too
+    mouse(els.canvas, 'mousedown', toClient('h', state.rulers[0].pos));
+    const stageRect = els.stage.getBoundingClientRect();
+    mouse(window, 'mouseup', { clientX: stageRect.left + 10, clientY: stageRect.top - 20 });
+    check('dragging a ruler off the stage removes it', state.rulers.length === 0, state.rulers.length);
+    key('f');
+    check('f turns ruler editing off again', !state.rulerEdit);
+    check('rulers are not part of the export', !('rulers' in JSON.parse(buildSessionJson(buildDataset()))));
+  }
 
   // --- marker size: toolbar box and the [ ] keys ---
   key('[');
@@ -390,6 +505,8 @@ ${PRELUDE}
   setSettingsOpen(false);
 
   // --- language: the UI switches, the exports do not ---
+  // let a "Calibration OK" from the calibration above run out first
+  await waitFor(() => els.calibOk.hidden, 3000);
   const csvJa = buildCsv(ds);
   const readmeJa = buildReadme(ds, ['README.md', 'coords.csv']);
   I18N.set('en');

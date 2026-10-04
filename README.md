@@ -3,7 +3,7 @@
 *English / [日本語](README_ja.md)*
 
 Click points on a **video or image** in your browser and get them back as
-**real-world coordinates**, calibrated from two reference points.
+**real-world coordinates**, calibrated from two or three reference points.
 
 No upload, no server, no install — everything runs locally in the browser.
 
@@ -12,7 +12,10 @@ No upload, no server, no install — everything runs locally in the browser.
 ## Features
 
 - **Video or images** — step through video frames, or load a set of still images as a sequence
-- **Two-point calibration** — click two points, type their real-world coordinates, done
+- **Two- or three-point calibration** — click two points, type their real-world coordinates, done.
+  When they share x or y, a third point (e.g. origin, a point on the x axis, a point on the y axis) finishes it
+- **Rulers** — drag horizontal / vertical guide lines over the frame; after calibration they show
+  their position in real-world coordinates (screen only, never exported)
 - **Add / Delete modes** — record points per frame, remove the nearest one
 - **Frame-accurate stepping** — the frame rate is detected from the video itself
   (`requestVideoFrameCallback`), and the media time of every visited frame is recorded
@@ -26,8 +29,10 @@ No upload, no server, no install — everything runs locally in the browser.
 ## Usage
 
 1. **Open** / 開く (Ctrl+O) — choose a video file, or one or more image files (drag & drop works too)
-2. Calibration mode starts automatically: click two points whose real-world coordinates you
-   know, and type each as `x,y`. Pick two points that differ in **both** x and y.
+2. Calibration mode starts automatically: click points whose real-world coordinates you
+   know, and type each as `x,y`. Two points that differ in **both** x and y are enough; if point 2
+   differs from point 1 in only one of them, the guide bar asks for a third point that differs in
+   the other.
 3. Add mode starts automatically: click to record points. `d` switches to Delete mode.
 4. **Save** / 保存 (Ctrl+S) — choose an output folder.
 
@@ -63,6 +68,8 @@ Three-finger scroll is consumed by macOS itself and never reaches the page.
 | `j` | Jump to a frame number |
 | `,` / `.` | Smaller / larger frame step |
 | `[` / `]` | Smaller / larger point markers |
+| `r` / `v` | Add a horizontal / vertical ruler |
+| `f` | Turn ruler editing on / off |
 | `e` | Settings — same as ⚙ (colours, marker outline, smooth curve, plot aspect, …) |
 | `?` or `h` | How to use — same as the ? button at the top right |
 | `Esc` | Close the settings, the QR codes, the changelog, the help or the feedback window |
@@ -70,9 +77,17 @@ Three-finger scroll is consumed by macOS itself and never reaches the page.
 ### Re-calibrating part way through
 
 Press `c` at any time to redo the calibration. Recorded points are kept: their pixel
-coordinates are what is stored, so confirming a new pair of reference points recomputes
+coordinates are what is stored, so confirming a new set of reference points recomputes
 every real-world coordinate. The calibration already in force stays active until the new
-pair is confirmed, so abandoning a half-entered re-calibration costs nothing.
+one is confirmed, so abandoning a half-entered re-calibration costs nothing.
+
+### Rulers
+
+`─` / `│` in the toolbar (or `r` / `v`) add a horizontal / vertical guide line through the middle
+of the view. Lines ignore the pointer until **Edit rulers** (`f`) is on, so you can click a
+point right on a line. While it is on, drag a line to move it; right-click it and press "Delete",
+or drag it off the screen, to remove it. Each line shows its position — in real-world coordinates once calibrated,
+in pixels before that. Rulers are drawn on screen only and never go into the saved files.
 
 ### Marker appearance
 
@@ -146,7 +161,9 @@ pts = d['coords_real'][0][0]     # frame 0, shape (n_points, 2)
 
 ## Calibration
 
-Two points define a per-axis linear map, with no rotation:
+Two or three points define a per-axis linear map, with no rotation. Each axis takes the first
+pair of points (in click order) whose real-world values differ on that axis — with origin, x-axis
+point and y-axis point, that is origin + x-axis point for x and origin + y-axis point for y:
 
 ```
 x_real = r0x + (x_img - p0x) * scale_x

@@ -75,6 +75,20 @@ assert.ok(readme.includes('\n## 1. 入力データ'), 'has numbered sections');
 assert.ok(readme.includes('|---|---|'), 'has tables');
 assert.ok(readme.includes('```python'), 'has a fenced python example');
 assert.ok(!readme.includes('===='), 'no plain-text underlines left over');
+assert.ok(readme.includes('キャリブレーション点 2: 画像 (300, 200)'), 'README lists every calibration point');
+
+// three calibration points: every one is listed and exported
+{
+  const d3 = Object.assign({}, dataset, {
+    calibImg: [{ x: 100, y: 400 }, { x: 300, y: 401 }, { x: 99, y: 200 }],
+    calibReal: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 0, y: 10 }],
+  });
+  const r3 = buildReadme(d3, ['coords.mat']);
+  assert.ok(r3.includes('キャリブレーション点 3: 画像 (99, 200)'), 'README lists the third calibration point');
+  const v3 = buildMatVars(d3);
+  assert.strictEqual(v3.calib_img.rows, 3);
+  assert.strictEqual(v3.calib_real.rows, 3);
+}
 // with no frame PNGs written, it says so instead of describing files that are absent
 assert.ok(readme.includes('フレームごとの PNG'), 'explains the missing frame PNGs');
 assert.ok(!readme.includes('### plot_frame_XXXX.png'), 'does not document absent plots');

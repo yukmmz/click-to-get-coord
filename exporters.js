@@ -20,8 +20,8 @@
  * @property {number} frameCount
  * @property {(number|null)[]} frameTimes  media time (s) of each frame; null for images
  * @property {Transform|null} transform
- * @property {Pt[]} calibImg               the two calibration points, image coords
- * @property {Pt[]} calibReal              the two calibration points, real coords
+ * @property {Pt[]} calibImg               the calibration points (2 or 3), image coords
+ * @property {Pt[]} calibReal              the calibration points (2 or 3), real coords
  * @property {Pt[][]} framesRaw            clicked points per frame, image coords
  * @property {Pt[][]} framesReal           the same points in real coords (NaN when uncalibrated)
  */
@@ -174,9 +174,9 @@ function buildReadme(d, fileNames) {
   const calibBlock = t
     ? [
       '```',
-      `画像点 p0 = (${num(t.p0.x)}, ${num(t.p0.y)}) [px]  ->  実世界点 r0 = (${num(t.r0.x)}, ${num(t.r0.y)})`,
-      `画像点 p1 = (${num(d.calibImg[1] ? d.calibImg[1].x : NaN)}, ${num(d.calibImg[1] ? d.calibImg[1].y : NaN)}) [px]`
-        + `  ->  実世界点 r1 = (${num(d.calibReal[1] ? d.calibReal[1].x : NaN)}, ${num(d.calibReal[1] ? d.calibReal[1].y : NaN)})`,
+      ...d.calibImg.map((p, i) => `キャリブレーション点 ${i + 1}: 画像 (${num(p.x)}, ${num(p.y)}) [px]`
+        + `  ->  実世界 (${num(d.calibReal[i] ? d.calibReal[i].x : NaN)}, ${num(d.calibReal[i] ? d.calibReal[i].y : NaN)})`),
+      `p0 = (${num(t.p0.x)}, ${num(t.p0.y)}) [px]  ->  r0 = (${num(t.r0.x)}, ${num(t.r0.y)})`,
       `scale_x = ${num(t.scaleX)}   [実世界単位 / px]`,
       `scale_y = ${num(t.scaleY)}   [実世界単位 / px]`,
       '```',
@@ -210,7 +210,7 @@ ${d.sourceFiles.map((f, i) => `| ${i} | ${f} |`).join('\n')}`;
 | アプリ | ${APP_URL} |
 | ソースコード | ${SOURCE_URL} |
 
-ブラウザ上で動画または画像をクリックし、クリック点の画素座標を2点キャリブレーションで
+ブラウザ上で動画または画像をクリックし、クリック点の画素座標を2点または3点のキャリブレーションで
 実世界座標へ変換して記録するツールです。同じアプリを開けば、下記の \`session.json\` から
 この作業を再開できます。`);
 
@@ -244,6 +244,12 @@ y_real = r0y + (y_img - p0y) * scale_y
 回転は含みません（画像の軸と実世界の軸が平行である前提）。実世界 Y 軸が上向きの場合、
 画像 y が下向きのため scale_y は負になります。
 
+キャリブレーション点は2点（x も y も異なる2点）または3点（x と y のどちらかが同じ2点に、
+残りの軸が異なる1点を加えたもの）です。x 方向は「実世界 x が異なる最初の2点」（点の番号順に
+1-2, 1-3, 2-3 の順で探す）から scale_x を、y 方向も同様に scale_y を求めます。p0 / r0 は
+変換式の基準で、x 成分は x 方向に使った2点の先の方、y 成分は y 方向に使った2点の先の方の
+値です（2点の場合はどちらも点 1）。
+
 本データのキャリブレーション値:
 
 ${calibBlock}
@@ -268,8 +274,8 @@ MATLAB Level 5 形式（無圧縮）。MATLAB の \`load\`、Python の \`scipy.
 | \`image_size\` | 1×2 double [幅_px, 高さ_px] |
 | \`fps\` | 1×1 double（画像入力時は NaN） |
 | \`frame_times\` | 1×${d.frameCount} double。各フレームの再生時刻 [秒]（画像入力時は NaN） |
-| \`calib_img\` | 2×2 double。キャリブレーション2点の画素座標。行=点, 列=[x, y] |
-| \`calib_real\` | 2×2 double。上の2点に対応する実世界座標 |
+| \`calib_img\` | N×2 double（N = キャリブレーション点の数で 2 または 3）。各点の画素座標。行=点, 列=[x, y] |
+| \`calib_real\` | N×2 double。上の各点に対応する実世界座標 |
 | \`calib_scale\` | 1×2 double [scale_x, scale_y]（未キャリブレーション時は NaN） |
 
 \`\`\`python
@@ -336,7 +342,7 @@ df = pd.read_csv('coords.csv', comment='#')
   sections.push(`### session.json
 
 アプリに読み戻して作業を再開するための完全な状態。\`format\` / \`formatVersion\` で形式を
-識別します。\`source\` に入力データの情報、\`calibration\` にキャリブレーション2点と変換係数、
+識別します。\`source\` に入力データの情報、\`calibration\` にキャリブレーション点（2点または3点）と変換係数、
 \`framesRaw\` にフレームごとのクリック点（画素座標）が入ります。実世界座標は
 \`calibration\` から再計算できるため保存していません。
 

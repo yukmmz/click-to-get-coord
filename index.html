@@ -6,11 +6,11 @@
 <title>Click to Get Coord</title>
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
-<meta name="description" content="Click points on a video or image and get real-world coordinates, calibrated from two reference points. No upload, no server.">
+<meta name="description" content="Click points on a video or image and get real-world coordinates, calibrated from two or three reference points. No upload, no server.">
 <!-- Link previews (LINE / Slack / X). og:image must be an absolute URL. -->
 <meta property="og:type" content="website">
 <meta property="og:title" content="Click to Get Coord">
-<meta property="og:description" content="Click points on a video or image and get real-world coordinates, calibrated from two reference points. No upload, no server.">
+<meta property="og:description" content="Click points on a video or image and get real-world coordinates, calibrated from two or three reference points. No upload, no server.">
 <meta property="og:url" content="https://yukmmz.github.io/click-to-get-coord/">
 <meta property="og:image" content="https://yukmmz.github.io/click-to-get-coord/icon-192.png">
 <meta name="twitter:card" content="summary">
@@ -51,6 +51,16 @@
     <input type="number" id="marker-size" min="1" max="40" step="1" data-i18n-title="tb.diameterKeys" title="[ で細く、] で太く">
   </div>
 
+  <div class="group">
+    <span class="label" data-i18n="tb.ruler">ルーラー</span>
+    <button id="btn-ruler-h" class="ruler-btn" disabled data-i18n-title="tb.rulerH" data-i18n-aria-label="tb.rulerH"
+      title="水平のルーラーを追加（r）" aria-label="水平のルーラーを追加（r）">─</button>
+    <button id="btn-ruler-v" class="ruler-btn" disabled data-i18n-title="tb.rulerV" data-i18n-aria-label="tb.rulerV"
+      title="垂直のルーラーを追加（v）" aria-label="垂直のルーラーを追加（v）">│</button>
+    <button id="btn-ruler-edit" class="ruler-edit" disabled aria-pressed="false" data-i18n="tb.rulerEdit"
+      data-i18n-title="tb.rulerEditTitle" title="オンの間だけ、ルーラーを動かしたり消したりできます（f）">ルーラーを操作</button>
+  </div>
+
   <div class="group right">
     <!-- Label and icon follow the state in syncFullscreenBtn(): corners out = expand, corners in = shrink -->
     <button id="fullscreen-btn" class="btn btn-icon" type="button" title="全画面表示" aria-label="全画面表示">
@@ -66,6 +76,9 @@
             data-i18n-title="c.settings" data-i18n-aria-label="c.settings" title="設定" aria-label="設定">⚙</button>
   </div>
 </header>
+
+<!-- ルーラーを右クリックしたときに、その場に出す削除ボタン -->
+<button id="ruler-menu" class="ruler-menu" type="button" hidden data-i18n="ruler.delete">このルーラーを削除</button>
 
 <!-- 次にやることを常に表示する案内バー -->
 <div id="guide">
@@ -105,6 +118,8 @@
 
 <main id="stage">
   <canvas id="canvas"></canvas>
+  <!-- shown for a moment when a calibration is confirmed -->
+  <div id="calib-ok" class="calib-ok" hidden data-i18n="guide.calibOk">キャリブレーション OK</div>
   <p id="placeholder" data-i18n="placeholder">動画または画像ファイルを開いてください（ドラッグ＆ドロップも可）</p>
 </main>
 

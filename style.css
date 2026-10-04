@@ -127,6 +127,41 @@ input[type="color"] { width: 44px; height: 28px; padding: 2px; }
 
 #placeholder { color: #888; font-size: 15px; }
 
+/* "Calibration OK", centred over the frame for a moment */
+.calib-ok {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 14px 28px;
+  border-radius: 12px;
+  background: rgba(31, 138, 95, 0.92);
+  color: #fff;
+  font-size: 22px;
+  font-weight: bold;
+  pointer-events: none;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+.calib-ok[hidden] { display: none; }
+
+/* --- rulers --- */
+.ruler-btn { min-width: 30px; font-weight: bold; }
+.ruler-edit.active { background: #22b8cf; border-color: #22b8cf; color: #08262b; }
+
+/* The "Delete this ruler" button shown at the pointer on a right-click. */
+.ruler-menu {
+  position: fixed;
+  z-index: 50;
+  padding: 6px 12px;
+  font-size: 13px;
+  background: #fff;
+  color: #c92a2a;
+  border: 1px solid #c92a2a;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+.ruler-menu[hidden] { display: none; }
+
 /* --- seek bar --- */
 
 #seek-row {
@@ -238,8 +273,13 @@ input[type="color"] { width: 44px; height: 28px; padding: 2px; }
   font-size: 15px;
 }
 
+/* one colour per mode, so the bar tells at a glance what a click will do */
+#guide.mode-calib { background: #16324f; border-bottom-color: #24507d; }
+#guide.mode-add { background: #2c3d17; border-bottom-color: #4a6526; color: #e3f5c4; }
+#guide.mode-del { background: #4a3410; border-bottom-color: #7a5416; color: #ffe0a3; }
+/* tones come last so they win over the mode colour */
 #guide.warn { background: #4a3410; border-bottom-color: #7a5416; color: #ffe0a3; }
-#guide.done { background: #143a2a; border-bottom-color: #1f6a4a; color: #b9f0d4; }
+#guide.ok { background: #1f8a5f; border-bottom-color: #2fb37c; color: #fff; }
 
 #guide-step {
   flex: none;
@@ -252,8 +292,11 @@ input[type="color"] { width: 44px; height: 28px; padding: 2px; }
   letter-spacing: 0.04em;
 }
 
+#guide.mode-calib #guide-step { background: #2f6feb; }
+#guide.mode-add #guide-step { background: #7cb342; }
+#guide.mode-del #guide-step { background: #b3730c; }
 #guide.warn #guide-step { background: #b3730c; }
-#guide.done #guide-step { background: #1f8a5f; }
+#guide.ok #guide-step { background: #fff; color: #1f8a5f; }
 
 #guide-text { font-weight: 600; }
 

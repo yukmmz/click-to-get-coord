@@ -12,7 +12,7 @@
 /* Single source of truth for the version; session.json records it. The app and source
  * URLs are APP_URL / SOURCE_URL in exporters.js (shared global scope of the classic
  * scripts), and the QR images (qr.svg / src-qr.svg) encode those same URLs. */
-const APP_VERSION = '1.3.0';
+const APP_VERSION = '1.4.0';
 
 /* Shared feedback endpoint (Google Apps Script web app, one for every yukmmz.github.io app).
  * Public on purpose: it can only append a row to a sheet and post to a Discord channel. */
@@ -30,6 +30,14 @@ const STORAGE_PREFIX = 'click-to-get-coord/';
  * to the app name. Bumping APP_VERSION means adding an entry here (test_wiring.js checks
  * that the first entry matches). Written for users, in both languages. */
 const CHANGELOG = [
+  { version: '1.4.0', date: '2026-10-05', items: [
+    { ja: 'ご要望を受けて、キャリブレーションを3点でもできるようにしました。2点目が1点目と x か y の一方しか違わないときは、足りない方が違う3点目を案内します（例: 原点・x 軸上の点・y 軸上の点）',
+      en: 'By request, calibration now also works with three points. If point 2 differs from point 1 in only x or only y, you are asked for a third point that differs in the other (e.g. the origin, a point on the x axis and a point on the y axis)' },
+    { ja: 'キャリブレーションが済んでいないまま点の記録に進もうとしたときに、確認を出すようにしました',
+      en: 'You are now asked to confirm before recording points without a finished calibration' },
+    { ja: 'ご要望を受けて、ルーラー（水平・垂直のガイド線）を追加しました。「ルーラーを操作」をオンにすると、ドラッグで動かしたり、右クリックか画面の外へのドラッグで消したりできます。キャリブレーション後は線の位置を実際の座標で表示します',
+      en: 'By request, added rulers (horizontal and vertical guide lines). Turn on "Edit rulers" to drag them, or to remove one by right-clicking it or dragging it off the screen. After calibration they show their position in real-world coordinates' },
+  ] },
   { version: '1.3.0', date: '2026-10-04', items: [
     { ja: 'ヘッダーに「FB」ボタンを追加しました。ご意見・不具合の報告を開発者に送れます',
       en: 'New "FB" button in the header: send feedback or a bug report to the developer' },
@@ -90,6 +98,12 @@ const STRINGS = {
     'tb.diameter': '点の直径',
     'tb.diameterTitle': '点の直径（画面上のピクセル）。[ で細く、] で太く',
     'tb.diameterKeys': '[ で細く、] で太く',
+    'tb.ruler': 'ルーラー',
+    'tb.rulerH': '水平のルーラーを追加（r）',
+    'tb.rulerV': '垂直のルーラーを追加（v）',
+    'tb.rulerEdit': 'ルーラーを操作',
+    'tb.rulerEditTitle': 'オンの間だけ、ルーラーを動かしたり消したりできます（f）。オフの間は線の上でも点を打てます',
+    'ruler.delete': 'このルーラーを削除',
 
     'nav.step': '送り幅',
     'nav.stepTitle': '◀ ▶ 1回で進むフレーム数。, で減らし . で増やす',
@@ -132,8 +146,10 @@ const STRINGS = {
     'calib.title': 'キャリブレーション {n}点目の実世界座標',
     'calib.pixel': 'クリック位置（画素）: x = {x}, y = {y}',
     'calib.lead': 'この点の<b>実際の座標</b>を入力してください。単位は任意（mm でも m でも図面上の値でも可）。',
-    'calib.note1': 'この後もう1点クリックします。2点で座標系が決まります。',
-    'calib.note2': '1点目と x も y も異なる点であること。同じだとその軸の倍率を決められません。',
+    'calib.note1': '1点目はどこでも構いません。この後、2点目（場合によっては3点目）をクリックします。',
+    'calib.note2': '1点目と x か y の少なくとも一方が異なる値にしてください。x も y も異なれば2点で完了します。',
+    'calib.note3x': 'これまでの点と x が異なる値にしてください。x の目盛りを決めるための点です。',
+    'calib.note3y': 'これまでの点と y が異なる値にしてください。y の目盛りを決めるための点です。',
     'calib.sameImgX': '2点の画像 X 座標が同じです。scaleX = 1 を使用します。',
     'calib.sameImgY': '2点の画像 Y 座標が同じです。scaleY = 1 を使用します。',
     'calib.zeroScaleX': 'scaleX が 0 です。2点の実世界 X 座標が同じではありませんか。',
@@ -149,11 +165,20 @@ const STRINGS = {
     'guide.calibInput': '{n}点目の実世界座標を入力してください',
     'guide.calibInputSub': 'いま画面に出ているダイアログに、その点の実際の x と y を入れて OK。間違えたらキャンセルして打ち直せます',
     'guide.calib1': '実世界の座標が分かっている点を、画像上でクリック（1点目）',
-    'guide.calib1Redo': '記録済みの点は消えません。新しい2点が確定するまで今のキャリブレーションが有効で、確定後に全点の実世界座標を計算し直します',
+    'guide.calib1Redo': '記録済みの点は消えません。新しいキャリブレーションが確定するまで今のものが有効で、確定後に全点の実世界座標を計算し直します',
     'guide.calib1Sub': 'クリックすると座標を入力する画面が出ます。例: グラフの原点、定規の目盛り、既知の長さの端点など',
-    'guide.calib2': '2点目をクリック（1点目と x も y も異なる点）',
+    'guide.calib2': '2点目をクリック（1点目と、少なくとも x か y が異なる点）',
     'guide.calib2Redo': '中断したい場合は a キーで Add に戻れば、今のキャリブレーションがそのまま残ります',
-    'guide.calib2Sub': '例: 1点目が原点なら、x 軸と y 軸のどちらの目盛りも違う点を選ぶ',
+    'guide.calib2Sub': 'x も y も異なる点なら2点で完了。片方だけ異なる点なら、もう片方を決める3点目を続けて案内します',
+    'guide.calib3x': '3点目をクリック（これまでの点と x 座標が異なる点）',
+    'guide.calib3y': '3点目をクリック（これまでの点と y 座標が異なる点）',
+    'guide.calib3xSub': '1点目と2点目の x が同じため、x の目盛りがまだ決まっていません。例: 1点目が原点なら x 軸上の点',
+    'guide.calib3ySub': '1点目と2点目の y が同じため、y の目盛りがまだ決まっていません。例: 1点目が原点なら y 軸上の点',
+    'guide.calibRetry2': 'いまの点は1点目と x も y も同じ値でした。少なくとも一方が異なる点をクリックし直してください',
+    'guide.calibRetry3x': 'いまの点も x がこれまでの点と同じでした。x 座標が異なる点をクリックし直してください',
+    'guide.calibRetry3y': 'いまの点も y がこれまでの点と同じでした。y 座標が異なる点をクリックし直してください',
+    'guide.calibOk': 'キャリブレーション OK',
+    'guide.calibOkSub': 'このままクリックで点を記録できます',
     'guide.del': '消したい点の近くをクリックすると、いちばん近い点が削除されます',
     'guide.delSub': '点の追加に戻るには a キー（または Add ボタン）{nav}',
     'guide.warnStep': '注意',
@@ -170,6 +195,7 @@ const STRINGS = {
     'status.loadFailed': '読み込みに失敗しました',
     'status.calib1': 'Calibration: 1点目をクリック',
     'status.calib2': 'Calibration: 2点目をクリック',
+    'status.calib3': 'Calibration: 3点目をクリック',
     'status.calibInput': 'Calibration: {n}点目の実世界座標を入力',
     'status.add': 'Add: クリックで点を追加',
     'status.del': 'Delete: 消したい点の近くをクリック',
@@ -184,6 +210,9 @@ const STRINGS = {
     'confirm.discardOk': '破棄して開く',
     'confirm.noCalibText': 'キャリブレーションがまだです。実世界座標は全て NaN になりますが、保存しますか？',
     'confirm.noCalibTitle': 'キャリブレーション未実施',
+    'confirm.noCalibAddText': 'キャリブレーションがまだ済んでいません。このまま点を記録すると、実世界座標は NaN になります（後からキャリブレーションすれば計算し直されます）。',
+    'confirm.noCalibAddOk': 'このまま記録する',
+    'confirm.noCalibAddBack': 'キャリブレーションに戻る',
     'confirm.noPointsText': 'クリック点が1つもありません。それでも保存しますか？',
     'confirm.noPointsTitle': '点がありません',
     'confirm.saveAnyway': 'このまま保存',
@@ -199,8 +228,9 @@ const STRINGS = {
     'log.multiVideo': '動画が複数選択されました。先頭の {name} のみ開きます。',
     'log.loaded': '読み込み完了: {name} — {n} フレーム, {w}x{h} px',
     'log.videoPngsOff': '動画のため、フレームごとの PNG（plot / overlay）の書き出しは既定でオフです。設定（⚙ / e）でオンにできます。',
-    'log.recalib': 'Calibration をやり直します。新しい2点が確定するまで今のキャリブレーションは有効なままで、記録済みの {n} 点も消えません（確定時に実世界座標を計算し直します）。',
-    'log.calibStart': 'Calibration モード: 実世界座標が既知の2点をクリックしてください（x も y も異なる2点）。',
+    'log.recalib': 'Calibration をやり直します。新しいキャリブレーションが確定するまで今のものは有効なままで、記録済みの {n} 点も消えません（確定時に実世界座標を計算し直します）。',
+    'log.calibStart': 'Calibration モード: 実世界座標が分かっている点をクリックしてください（x も y も異なる2点。片方しか異ならないときは3点）。',
+    'log.calibRejected': 'キャリブレーション {n} 点目は、座標系を決めるのに使えない値でした（{axis} がこれまでの点と同じ）。もう一度クリックしてください。',
     'log.recalibAborted': 'キャリブレーションのやり直しを中断しました。前のキャリブレーションをそのまま使います。',
     'log.calibAborted': 'キャリブレーションを中断しました。',
     'log.chooseMode': 'モードを選んでからクリックしてください。',
@@ -238,9 +268,10 @@ const STRINGS = {
 
     'help.body': `<ol>
   <li><b>開く</b>（Ctrl+O）で動画ファイル、または画像ファイル（複数可）を選ぶ。</li>
-  <li>自動的に <b>Calibration モード</b>に入る。画像上の2点をクリックし、それぞれの実世界座標を
-    入力する。<b>x も y も異なる2点</b>を選ぶこと。</li>
-  <li>2点入力すると自動的に <b>Add モード</b>に入る。クリックで点を記録する。</li>
+  <li>自動的に <b>Calibration モード</b>に入る。実世界座標が分かっている点をクリックし、その座標を
+    入力する。<b>x も y も異なる2点</b>なら2点で、x か y の片方しか異ならないときは、もう片方が
+    異なる<b>3点目</b>で完了する（例: 原点・x 軸上の点・y 軸上の点）。案内バーが次に打つ点を示す。</li>
+  <li>キャリブレーションが済むと自動的に <b>Add モード</b>に入る。クリックで点を記録する。</li>
   <li>消したい点があれば <b>Delete モード</b>（d）でその点の近くをクリックする。</li>
   <li><b>保存</b>（Ctrl+S）で出力先フォルダを選ぶと、そのフォルダに全ファイルが書き出される。</li>
 </ol>
@@ -256,11 +287,21 @@ const STRINGS = {
 <h3>キャリブレーションのやり直し</h3>
 <p>点を打っている途中でも <b>c</b> キー（または Calibration ボタン）でやり直せます。</p>
 <ul>
-  <li>記録済みのクリック点は<b>消えません</b>。新しい2点が確定した時点で、全点の実世界座標が
+  <li>記録済みのクリック点は<b>消えません</b>。新しいキャリブレーションが確定した時点で、全点の実世界座標が
     新しい変換で計算し直されます（画素座標を保持しているため）。</li>
-  <li>新しい2点が確定するまで、<b>今のキャリブレーションは有効なまま</b>です。1点だけ入れて
+  <li>新しいキャリブレーションが確定するまで、<b>今のキャリブレーションは有効なまま</b>です。途中で
     やめても、前の設定は失われません（a キーで Add に戻れば中断できます）。</li>
   <li>やり直し中は、前のキャリブレーション点が薄く、新しい点が濃く表示されます。</li>
+</ul>
+
+<h3>ルーラー</h3>
+<ul>
+  <li>ツールバーの <b>─</b>（r キー）で水平、<b>│</b>（v キー）で垂直のガイド線を追加します。何本でも置けます。</li>
+  <li>ふだんの線は触れても反応しないので、線の真上の点もそのままクリックできます。</li>
+  <li><b>ルーラーを操作</b>（f キー）をオンにしている間だけ、線をドラッグで動かしたり、右クリックして
+    「削除」を押すか画面の外までドラッグして消したりできます。終わったらもう一度押してオフに戻します。</li>
+  <li>キャリブレーション後は、線の位置を実際の座標で表示します。</li>
+  <li>ルーラーは画面に表示するだけで、保存する画像やデータには入りません。</li>
 </ul>
 
 <h3>拡大・移動</h3>
@@ -284,13 +325,15 @@ const STRINGS = {
   <tr><td>j</td><td>フレーム番号を指定して移動</td></tr>
   <tr><td>, / .</td><td>送り幅（◀ ▶ 1回で進むフレーム数）を減らす / 増やす</td></tr>
   <tr><td>[ / ]</td><td>点の直径を小さく / 大きく</td></tr>
+  <tr><td>r / v</td><td>水平 / 垂直のルーラーを追加</td></tr>
+  <tr><td>f</td><td>ルーラーの操作をオン / オフ</td></tr>
   <tr><td>e</td><td>設定（⚙ と同じ。変更はその場で反映）</td></tr>
   <tr><td>? / h</td><td>この使い方（上部の ? ボタンと同じ）</td></tr>
   <tr><td>Esc</td><td>設定・QR コード・更新履歴・使い方・フィードバックの窓を閉じる</td></tr>
 </table>
 
 <h3>「作業を再開」とは</h3>
-<p>保存すると、出力フォルダに <code>session.json</code>（キャリブレーションの2点と変換係数、
+<p>保存すると、出力フォルダに <code>session.json</code>（キャリブレーションの点と変換係数、
   フレームごとのクリック点）が書き出されます。<b>作業を再開</b>はこれを読み戻す機能です。</p>
 <ol>
   <li>前回と<b>同じ動画・画像</b>を「開く」で読み込む（画像そのものは session.json に入っていません）</li>
@@ -336,6 +379,12 @@ const STRINGS = {
     'tb.diameter': 'Point size',
     'tb.diameterTitle': 'Point diameter (screen pixels). [ smaller, ] larger',
     'tb.diameterKeys': '[ smaller, ] larger',
+    'tb.ruler': 'Ruler',
+    'tb.rulerH': 'Add a horizontal ruler (r)',
+    'tb.rulerV': 'Add a vertical ruler (v)',
+    'tb.rulerEdit': 'Edit rulers',
+    'tb.rulerEditTitle': 'Only while this is on can rulers be moved or removed (f). While off, you can click points right on a line',
+    'ruler.delete': 'Delete this ruler',
 
     'nav.step': 'Step',
     'nav.stepTitle': 'Frames moved by one press of ◀ ▶. , for fewer, . for more',
@@ -378,8 +427,10 @@ const STRINGS = {
     'calib.title': 'Calibration point {n}: real-world coordinates',
     'calib.pixel': 'Clicked position (pixels): x = {x}, y = {y}',
     'calib.lead': 'Enter the <b>real-world coordinates</b> of this point. Any unit works (mm, m, or values read off a drawing).',
-    'calib.note1': 'You will click one more point next. Two points define the coordinate system.',
-    'calib.note2': 'It must differ from point 1 in both x and y; otherwise that axis\'s scale cannot be determined.',
+    'calib.note1': 'Point 1 can be anywhere. You will click point 2 next (and sometimes point 3).',
+    'calib.note2': 'It must differ from point 1 in x, in y, or in both. If both differ, two points are enough.',
+    'calib.note3x': 'Its x must differ from the previous points; this point fixes the x scale.',
+    'calib.note3y': 'Its y must differ from the previous points; this point fixes the y scale.',
     'calib.sameImgX': 'The two points have the same image X. Using scaleX = 1.',
     'calib.sameImgY': 'The two points have the same image Y. Using scaleY = 1.',
     'calib.zeroScaleX': 'scaleX is 0. Do the two points have the same real-world X?',
@@ -395,11 +446,20 @@ const STRINGS = {
     'guide.calibInput': 'Enter the real-world coordinates of point {n}',
     'guide.calibInputSub': 'Type the point\'s real x and y into the dialog on screen and press OK. Clicked the wrong spot? Cancel and click again',
     'guide.calib1': 'Click a point whose real-world coordinates you know (point 1)',
-    'guide.calib1Redo': 'Recorded points are kept. The current calibration stays in force until two new points are confirmed; then every real-world coordinate is recomputed',
+    'guide.calib1Redo': 'Recorded points are kept. The current calibration stays in force until the new one is confirmed; then every real-world coordinate is recomputed',
     'guide.calib1Sub': 'Clicking asks for its coordinates. For example: a graph\'s origin, a ruler mark, or an end of a known length',
-    'guide.calib2': 'Click point 2 (different from point 1 in both x and y)',
+    'guide.calib2': 'Click point 2 (different from point 1 in x, in y, or both)',
     'guide.calib2Redo': 'To give up, press a to go back to Add; the current calibration stays as it is',
-    'guide.calib2Sub': 'For example, if point 1 is the origin, pick a point off both the x and the y axis',
+    'guide.calib2Sub': 'If it differs in both x and y, you are done. If only one differs, you are asked for a third point for the other',
+    'guide.calib3x': 'Click point 3 (its x different from the previous points)',
+    'guide.calib3y': 'Click point 3 (its y different from the previous points)',
+    'guide.calib3xSub': 'Points 1 and 2 have the same x, so the x scale is not fixed yet. For example, if point 1 is the origin, a point on the x axis',
+    'guide.calib3ySub': 'Points 1 and 2 have the same y, so the y scale is not fixed yet. For example, if point 1 is the origin, a point on the y axis',
+    'guide.calibRetry2': 'That point had the same x and y as point 1. Click a point that differs in at least one of them',
+    'guide.calibRetry3x': 'That point also had the same x as the previous points. Click a point with a different x',
+    'guide.calibRetry3y': 'That point also had the same y as the previous points. Click a point with a different y',
+    'guide.calibOk': 'Calibration OK',
+    'guide.calibOkSub': 'Click to record points now',
     'guide.del': 'Click near a point to delete the nearest one',
     'guide.delSub': 'Press a (or the Add button) to go back to adding points{nav}',
     'guide.warnStep': 'NOTE',
@@ -416,6 +476,7 @@ const STRINGS = {
     'status.loadFailed': 'Loading failed',
     'status.calib1': 'Calibration: click point 1',
     'status.calib2': 'Calibration: click point 2',
+    'status.calib3': 'Calibration: click point 3',
     'status.calibInput': 'Calibration: enter the real-world coordinates of point {n}',
     'status.add': 'Add: click to add a point',
     'status.del': 'Delete: click near the point to remove',
@@ -430,6 +491,9 @@ const STRINGS = {
     'confirm.discardOk': 'Discard and open',
     'confirm.noCalibText': 'Not calibrated yet, so every real-world coordinate will be NaN. Save anyway?',
     'confirm.noCalibTitle': 'Not calibrated',
+    'confirm.noCalibAddText': 'The calibration is not finished. Points recorded now get NaN real-world coordinates (they are recomputed once you calibrate).',
+    'confirm.noCalibAddOk': 'Record anyway',
+    'confirm.noCalibAddBack': 'Back to calibration',
     'confirm.noPointsText': 'There are no clicked points. Save anyway?',
     'confirm.noPointsTitle': 'No points',
     'confirm.saveAnyway': 'Save anyway',
@@ -445,8 +509,9 @@ const STRINGS = {
     'log.multiVideo': 'Several videos were selected. Only the first one, {name}, is opened.',
     'log.loaded': 'Loaded: {name} — {n} frames, {w}x{h} px',
     'log.videoPngsOff': 'This is a video, so per-frame PNGs (plot / overlay) are off by default. Turn them on in the settings (⚙ / e).',
-    'log.recalib': 'Redoing the calibration. The current one stays in force until two new points are confirmed, and the {n} recorded points are kept (their real-world coordinates are recomputed then).',
-    'log.calibStart': 'Calibration mode: click two points with known real-world coordinates (different in both x and y).',
+    'log.recalib': 'Redoing the calibration. The current one stays in force until the new one is confirmed, and the {n} recorded points are kept (their real-world coordinates are recomputed then).',
+    'log.calibStart': 'Calibration mode: click points with known real-world coordinates (two that differ in both x and y, or three when only one of them differs).',
+    'log.calibRejected': 'Calibration point {n} cannot help fix the coordinate system ({axis} is the same as before). Click again.',
     'log.recalibAborted': 'Re-calibration abandoned. The previous calibration is kept.',
     'log.calibAborted': 'Calibration abandoned.',
     'log.chooseMode': 'Choose a mode before clicking.',
@@ -484,9 +549,11 @@ const STRINGS = {
 
     'help.body': `<ol>
   <li><b>Open</b> (Ctrl+O) a video file, or one or more image files.</li>
-  <li><b>Calibration mode</b> starts automatically. Click two points on the image and enter the
-    real-world coordinates of each. Pick <b>two points that differ in both x and y</b>.</li>
-  <li>After the second point, <b>Add mode</b> starts automatically. Click to record points.</li>
+  <li><b>Calibration mode</b> starts automatically. Click points whose real-world coordinates you
+    know and enter them. <b>Two points that differ in both x and y</b> are enough; if they differ in
+    only one, a <b>third point</b> that differs in the other finishes it (e.g. the origin, a point on
+    the x axis and a point on the y axis). The guide bar says which point to click next.</li>
+  <li>Once calibrated, <b>Add mode</b> starts automatically. Click to record points.</li>
   <li>To remove a point, switch to <b>Delete mode</b> (d) and click near it.</li>
   <li><b>Save</b> (Ctrl+S) and pick an output folder; every file is written into it.</li>
 </ol>
@@ -502,11 +569,21 @@ const STRINGS = {
 <h3>Redoing the calibration</h3>
 <p>Press <b>c</b> (or the Calibration button) at any time, even with points already recorded.</p>
 <ul>
-  <li>Recorded points are <b>kept</b>. Once the two new points are confirmed, every real-world
+  <li>Recorded points are <b>kept</b>. Once the new calibration is confirmed, every real-world
     coordinate is recomputed with the new transform (the pixel coordinates are what is stored).</li>
-  <li>Until then, <b>the current calibration stays in force</b>. Entering one point and giving up
+  <li>Until then, <b>the current calibration stays in force</b>. Giving up part way
     loses nothing (press a to go back to Add).</li>
   <li>While redoing, the old calibration points are drawn faint and the new ones solid.</li>
+</ul>
+
+<h3>Rulers</h3>
+<ul>
+  <li><b>─</b> in the toolbar (r key) adds a horizontal guide line, <b>│</b> (v key) a vertical one. Add as many as you like.</li>
+  <li>Normally the lines ignore the pointer, so you can click a point right on a line.</li>
+  <li>Only while <b>Edit rulers</b> (f key) is on can you drag a line to move it, or remove it by
+    right-clicking it and pressing "Delete" or by dragging it off the screen. Press it again to turn it off.</li>
+  <li>After calibration a line shows its position in real-world coordinates.</li>
+  <li>Rulers are only drawn on screen; they never go into the saved images or data.</li>
 </ul>
 
 <h3>Zoom and pan</h3>
@@ -530,13 +607,15 @@ const STRINGS = {
   <tr><td>j</td><td>Jump to a frame number</td></tr>
   <tr><td>, / .</td><td>Smaller / larger frame step (frames per press of ◀ ▶)</td></tr>
   <tr><td>[ / ]</td><td>Smaller / larger points</td></tr>
+  <tr><td>r / v</td><td>Add a horizontal / vertical ruler</td></tr>
+  <tr><td>f</td><td>Turn ruler editing on / off</td></tr>
   <tr><td>e</td><td>Settings (same as ⚙; changes apply immediately)</td></tr>
   <tr><td>? / h</td><td>This help (same as the ? button at the top)</td></tr>
   <tr><td>Esc</td><td>Close the settings, QR codes, changelog, feedback window or this help</td></tr>
 </table>
 
 <h3>What "Resume" does</h3>
-<p>Saving writes <code>session.json</code> into the output folder (the two calibration points,
+<p>Saving writes <code>session.json</code> into the output folder (the calibration points,
   the transform, and the clicked points of every frame). <b>Resume</b> reads it back.</p>
 <ol>
   <li><b>Open</b> the <b>same video or images</b> as before (the images themselves are not in session.json)</li>
@@ -636,6 +715,11 @@ const els = {
   setIndexAuto: /** @type {HTMLInputElement} */ (document.getElementById('set-index-auto')),
   setIndexColor: /** @type {HTMLInputElement} */ (document.getElementById('set-index-color')),
   markerSize: /** @type {HTMLInputElement} */ (document.getElementById('marker-size')),
+  rulerH: /** @type {HTMLButtonElement} */ (document.getElementById('btn-ruler-h')),
+  rulerV: /** @type {HTMLButtonElement} */ (document.getElementById('btn-ruler-v')),
+  rulerEdit: /** @type {HTMLButtonElement} */ (document.getElementById('btn-ruler-edit')),
+  rulerMenu: /** @type {HTMLButtonElement} */ (document.getElementById('ruler-menu')),
+  calibOk: /** @type {HTMLElement} */ (document.getElementById('calib-ok')),
   zoomIn: /** @type {HTMLButtonElement} */ (document.getElementById('btn-zoom-in')),
   zoomOut: /** @type {HTMLButtonElement} */ (document.getElementById('btn-zoom-out')),
   zoomReset: /** @type {HTMLButtonElement} */ (document.getElementById('btn-zoom-reset')),
@@ -716,8 +800,23 @@ const state = {
   needsFit: true,
   /** how many frames one press of prev/next moves */
   frameStep: 1,
-  /** 1 or 2 while the calibration coordinate dialog is open, 0 otherwise */
+  /** 1-3 while the calibration coordinate dialog is open, 0 otherwise */
   awaitingCalibInput: 0,
+  /** set when the last calibration point added nothing and has to be clicked again */
+  calibRetry: false,
+  /**
+   * Guide lines drawn over the frame, in image pixels: 'h' lines sit at y = pos,
+   * 'v' lines at x = pos. Screen-only: never exported.
+   * @type {{axis: 'h'|'v', pos: number}[]}
+   */
+  rulers: [],
+  /** @type {{index: number}|null} the ruler being dragged */
+  rulerDrag: null,
+  /**
+   * Rulers react to the pointer only while this is on ("Edit rulers"). Off by default,
+   * also right after adding one, so a click on a line still records a point.
+   */
+  rulerEdit: false,
 };
 
 // --- small helpers -----------------------------------------------------------
@@ -841,7 +940,7 @@ async function showMessage(text, title = t('dlg.messageTitle')) {
 
 /**
  * Ask for the real-world coordinates of a calibration point.
- * @param {number} pointNo 1 or 2
+ * @param {number} pointNo 1, 2 or 3
  * @param {Pt} pixel where the user clicked
  * @param {MouseEvent} [event] the originating click, used to place the dialog
  * @returns {Promise<Pt|null>} null when cancelled
@@ -849,7 +948,7 @@ async function showMessage(text, title = t('dlg.messageTitle')) {
 async function askCalibReal(pointNo, pixel, event) {
   els.calibTitle.textContent = t('calib.title', { n: pointNo });
   els.calibPixel.textContent = t('calib.pixel', { x: pixel.x.toFixed(1), y: pixel.y.toFixed(1) });
-  els.calibNote.textContent = t(pointNo === 1 ? 'calib.note1' : 'calib.note2');
+  els.calibNote.textContent = t(calibStepKey('calib.note', pointNo));
   els.calibX.value = '';
   els.calibY.value = '';
   placeDialogAwayFrom(els.dlgCalib, event);
@@ -880,14 +979,45 @@ async function askFrameNumber(max, current) {
 // --- guide bar ---------------------------------------------------------------
 
 /**
+ * Message key for calibration point `pointNo`: `<prefix>1`, `<prefix>2`, or for point 3
+ * `<prefix>3x` / `<prefix>3y` after the axis the first two points left undetermined.
+ * @param {string} prefix
+ * @param {number} pointNo
+ */
+function calibStepKey(prefix, pointNo) {
+  if (pointNo < 3) return prefix + pointNo;
+  // the real values of points 1 and 2; while point 3's dialog is open it is not yet among them
+  return prefix + (calibMissing(state.pendingCalib.real.slice(0, 2)).x ? '3x' : '3y');
+}
+
+/**
  * Say what to do next, in the bar under the toolbar.
- * @param {{step: string, text: string, sub?: string, tone?: 'info'|'warn'|'done'}} g
+ * The bar takes the colour of the current mode (mode-calib / mode-add / mode-del);
+ * a 'warn' or 'ok' tone overrides it.
+ * @param {{step: string, text: string, sub?: string, tone?: 'info'|'warn'|'ok'}} g
  */
 function setGuide(g) {
   els.guideStep.textContent = g.step;
   els.guideText.textContent = g.text;
   els.guideSub.textContent = g.sub || '';
-  els.guide.className = g.tone === 'warn' ? 'warn' : g.tone === 'done' ? 'done' : '';
+  els.guide.className = [state.source ? `mode-${state.mode}` : '', g.tone === 'warn' || g.tone === 'ok' ? g.tone : '']
+    .filter(Boolean).join(' ');
+}
+
+/** How long "Calibration OK" stays up once a calibration is confirmed. */
+const CALIB_OK_MS = 1200;
+/** performance.now() until which the guide bar and the stage say "Calibration OK". */
+let calibOkUntil = 0;
+
+function flashCalibOk() {
+  calibOkUntil = performance.now() + CALIB_OK_MS;
+  els.calibOk.hidden = false;
+  updateGuide();
+  setTimeout(() => {
+    if (performance.now() < calibOkUntil) return;   // a newer calibration restarted the timer
+    els.calibOk.hidden = true;
+    updateGuide();
+  }, CALIB_OK_MS);
 }
 
 /** Recompute the guide from the current state. */
@@ -899,6 +1029,11 @@ function updateGuide() {
 
   const nav = state.source.frameCount > 1 ? t('guide.nav') : '';
 
+  if (performance.now() < calibOkUntil) {
+    setGuide({ step: 'OK', text: t('guide.calibOk'), sub: t('guide.calibOkSub'), tone: 'ok' });
+    return;
+  }
+
   if (state.mode === 'calib') {
     if (state.awaitingCalibInput) {
       setGuide({
@@ -908,24 +1043,35 @@ function updateGuide() {
       });
       return;
     }
-    if (state.pendingCalib.img.length === 0) {
+    const next = state.pendingCalib.img.length + 1;
+    if (next === 1) {
       setGuide({
         step: 'STEP 2',
         text: t('guide.calib1'),
         sub: t(state.transform ? 'guide.calib1Redo' : 'guide.calib1Sub'),
       });
-    } else {
+    } else if (state.calibRetry) {
+      setGuide({
+        step: 'STEP 2',
+        text: t(calibStepKey('guide.calibRetry', next)),
+        sub: next === 2 ? t('guide.calib2Sub') : t(calibStepKey('guide.calib', next) + 'Sub'),
+        tone: 'warn',
+      });
+    } else if (next === 2) {
       setGuide({
         step: 'STEP 2',
         text: t('guide.calib2'),
         sub: t(state.transform ? 'guide.calib2Redo' : 'guide.calib2Sub'),
       });
+    } else {
+      const key = calibStepKey('guide.calib', next);
+      setGuide({ step: 'STEP 2', text: t(key), sub: t(key + 'Sub') });
     }
     return;
   }
 
   if (state.mode === 'del') {
-    setGuide({ step: 'DELETE', text: t('guide.del'), sub: t('guide.delSub', { nav }), tone: 'warn' });
+    setGuide({ step: 'DELETE', text: t('guide.del'), sub: t('guide.delSub', { nav }) });
     return;
   }
 
@@ -939,7 +1085,6 @@ function updateGuide() {
       step: 'STEP 3',
       text: t('guide.add'),
       sub: n === 0 ? t('guide.addSub0', { nav }) : t('guide.addSubN', { n, nav }),
-      tone: n === 0 ? 'info' : 'done',
     });
     return;
   }
@@ -1036,6 +1181,9 @@ async function loadFiles(files) {
     els.zoomIn.disabled = true;
     els.zoomOut.disabled = true;
     els.zoomReset.disabled = true;
+    els.rulerH.disabled = true;
+    els.rulerV.disabled = true;
+    els.rulerEdit.disabled = true;
     els.modeButtons.forEach((b) => { b.disabled = true; });
   } finally {
     state.busy = false;
@@ -1050,6 +1198,9 @@ function resetAnnotations() {
   state.calibReal = [];
   state.transform = null;
   state.pendingCalib = { img: [], real: [] };
+  state.calibRetry = false;
+  state.rulers = [];
+  setRulerEdit(false);
   state.frameIndex = 0;
   state.dirty = false;
   state.needsFit = true;
@@ -1070,6 +1221,9 @@ function setEnabled(enabled) {
   els.zoomIn.disabled = !enabled;
   els.zoomOut.disabled = !enabled;
   els.zoomReset.disabled = !enabled;
+  els.rulerH.disabled = !enabled;
+  els.rulerV.disabled = !enabled;
+  els.rulerEdit.disabled = !enabled;
   els.modeButtons.forEach((b) => { b.disabled = !enabled; });
 }
 
@@ -1213,8 +1367,151 @@ function redraw() {
     drawMarkers(ctx, points, state.calibImg, markerStyle, v.scale);
   }
 
+  drawRulers(ctx, dpr);
   els.zoomLabel.textContent = `${Math.round(v.scale * 100)}%`;
 }
+
+// --- rulers ------------------------------------------------------------------
+// Thin horizontal / vertical guide lines over the frame. They live in image pixels, so
+// they stay put on the frame while zooming and panning, and are drawn only on screen.
+
+/** How close (CSS px) the pointer must be to a ruler to grab it. */
+const RULER_HIT = 6;
+const RULER_COLOR = '#22b8cf';
+
+/** @param {number} v */
+function fmtRuler(v) {
+  return String(Number(v.toPrecision(6)));
+}
+
+/**
+ * The ruler's position as text: real-world once calibrated, pixels before that.
+ * @param {{axis: 'h'|'v', pos: number}} r
+ */
+function rulerLabel(r) {
+  const name = r.axis === 'h' ? 'y' : 'x';
+  if (!state.transform) return `${name} = ${fmtRuler(r.pos)} px`;
+  const real = r.axis === 'h' ? pixelToReal(state.transform, 0, r.pos).y : pixelToReal(state.transform, r.pos, 0).x;
+  return `${name} = ${fmtRuler(real)}`;
+}
+
+/**
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {number} dpr
+ */
+function drawRulers(ctx, dpr) {
+  if (state.rulers.length === 0) return;
+  const v = state.view;
+  const w = els.canvas.width / dpr;
+  const h = els.canvas.height / dpr;
+  ctx.save();
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.font = '12px system-ui, sans-serif';
+  ctx.textBaseline = 'middle';
+  for (const r of state.rulers) {
+    // +0.5 keeps the 1px line on a pixel row, so it stays crisp
+    const at = Math.round(r.axis === 'h' ? v.ty + r.pos * v.scale : v.tx + r.pos * v.scale) + 0.5;
+    ctx.strokeStyle = RULER_COLOR;
+    // thicker while they can be grabbed, so the state shows on the frame too
+    ctx.lineWidth = state.rulerEdit ? 2 : 1;
+    ctx.beginPath();
+    if (r.axis === 'h') { ctx.moveTo(0, at); ctx.lineTo(w, at); } else { ctx.moveTo(at, 0); ctx.lineTo(at, h); }
+    ctx.stroke();
+
+    const text = rulerLabel(r);
+    const tw = ctx.measureText(text).width;
+    const lx = r.axis === 'h' ? 6 : at + 6;
+    const ly = r.axis === 'h' ? at - 11 : 14;
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.fillRect(lx - 3, ly - 8, tw + 6, 16);
+    ctx.fillStyle = RULER_COLOR;
+    ctx.fillText(text, lx, ly);
+  }
+  ctx.restore();
+}
+
+/**
+ * Add a ruler through the middle of what is on screen (kept inside the frame).
+ * @param {'h'|'v'} axis
+ */
+function addRuler(axis) {
+  const f = state.currentFrame;
+  if (!f) return;
+  const rect = els.stage.getBoundingClientRect();
+  const v = state.view;
+  const pos = axis === 'h'
+    ? Math.min(f.height, Math.max(0, (rect.height / 2 - v.ty) / v.scale))
+    : Math.min(f.width, Math.max(0, (rect.width / 2 - v.tx) / v.scale));
+  state.rulers.push({ axis, pos });
+  redraw();
+}
+
+/**
+ * The ruler under the pointer (the most recently added one wins), or -1.
+ * Always -1 unless "Edit rulers" is on.
+ * @param {MouseEvent} event
+ */
+function rulerAt(event) {
+  if (!state.rulerEdit) return -1;
+  const rect = els.canvas.getBoundingClientRect();
+  const px = event.clientX - rect.left;
+  const py = event.clientY - rect.top;
+  const v = state.view;
+  for (let i = state.rulers.length - 1; i >= 0; i--) {
+    const r = state.rulers[i];
+    const d = r.axis === 'h' ? Math.abs(py - (v.ty + r.pos * v.scale)) : Math.abs(px - (v.tx + r.pos * v.scale));
+    if (d <= RULER_HIT) return i;
+  }
+  return -1;
+}
+
+/** @param {number} index */
+function removeRuler(index) {
+  if (index < 0 || index >= state.rulers.length) return;
+  state.rulers.splice(index, 1);
+  redraw();
+}
+
+/** @param {boolean} on */
+function setRulerEdit(on) {
+  state.rulerEdit = on;
+  state.rulerDrag = null;
+  els.rulerEdit.classList.toggle('active', on);
+  els.rulerEdit.setAttribute('aria-pressed', String(on));
+  if (!on) {
+    hideRulerMenu();
+    els.canvas.style.cursor = '';
+  }
+  redraw();
+}
+
+/** Ruler the delete button is showing for, or -1. */
+let rulerMenuIndex = -1;
+
+/**
+ * @param {MouseEvent} event
+ * @param {number} index
+ */
+function showRulerMenu(event, index) {
+  rulerMenuIndex = index;
+  els.rulerMenu.hidden = false;
+  // next to the pointer, kept inside the window
+  const bw = els.rulerMenu.offsetWidth;
+  const bh = els.rulerMenu.offsetHeight;
+  els.rulerMenu.style.left = `${Math.min(event.clientX + 8, window.innerWidth - bw - 4)}px`;
+  els.rulerMenu.style.top = `${Math.min(event.clientY + 8, window.innerHeight - bh - 4)}px`;
+}
+
+/** @returns {boolean} whether it was open */
+function hideRulerMenu() {
+  const wasOpen = !els.rulerMenu.hidden;
+  els.rulerMenu.hidden = true;
+  rulerMenuIndex = -1;
+  return wasOpen;
+}
+
+/** Set when a ruler drag ends on the canvas, so the click that follows adds no point. */
+let swallowClick = false;
 
 function updateLabels() {
   const s = state.source;
@@ -1241,7 +1538,10 @@ function setMode(mode) {
 function enterCalibMode() {
   setMode('calib');
   state.awaitingCalibInput = 0;
+  state.calibRetry = false;
   state.pendingCalib = { img: [], real: [] };
+  calibOkUntil = 0;
+  els.calibOk.hidden = true;
   const n = totalPoints(state.framesRaw);
   if (state.transform) {
     log(t('log.recalib', { n }));
@@ -1255,9 +1555,31 @@ function enterCalibMode() {
 
 /** Drop a half-finished re-calibration and keep the one already in force. */
 function discardPendingCalib() {
+  state.calibRetry = false;
   if (state.pendingCalib.img.length === 0) return;
   state.pendingCalib = { img: [], real: [] };
   log(t(state.transform ? 'log.recalibAborted' : 'log.calibAborted'), 'warn');
+}
+
+/**
+ * Add mode from the key or the button. With no calibration in force at all, confirm first:
+ * points recorded now get NaN real-world coordinates. Leaving a re-calibration half way
+ * needs no question, since the previous calibration simply stays.
+ */
+async function requestAddMode() {
+  if (!state.source) return;
+  if (!state.transform && state.mode !== 'add') {
+    const go = await showConfirm(t('confirm.noCalibAddText'), {
+      title: t('confirm.noCalibTitle'),
+      okLabel: t('confirm.noCalibAddOk'),
+      cancelLabel: t('confirm.noCalibAddBack'),
+    });
+    if (!go) {
+      if (state.mode !== 'calib') enterCalibMode();
+      return;
+    }
+  }
+  enterAddMode();
 }
 
 function enterAddMode() {
@@ -1292,6 +1614,10 @@ function eventToImageCoords(event) {
 
 /** @param {MouseEvent} event */
 async function onCanvasClick(event) {
+  if (swallowClick) {
+    swallowClick = false;
+    return;
+  }
   if (!state.source || state.busy) return;
   if (document.querySelector('dialog[open]')) return;
   const f = state.currentFrame;
@@ -1334,16 +1660,25 @@ async function handleCalibClick(p, event) {
     updateGuide();
     return;
   }
+  const before = calibMissing(state.pendingCalib.real);
   state.pendingCalib.real.push(real);
-  updateGuide();
-  setStatus(state.pendingCalib.img.length >= 2 ? 'status.add' : 'status.calib2');
+  const missing = calibMissing(state.pendingCalib.real);
+  if (n >= 2 && missing.x === before.x && missing.y === before.y) {
+    // this point adds no new x or y value, so it cannot fix anything: drop it and ask again
+    state.pendingCalib.img.pop();
+    state.pendingCalib.real.pop();
+    state.calibRetry = true;
+    log(t('log.calibRejected', { n, axis: before.x && before.y ? 'x, y' : before.x ? 'x' : 'y' }), 'warn');
+    setStatus(n === 2 ? 'status.calib2' : 'status.calib3');
+    redraw();
+    updateGuide();
+    return;
+  }
+  state.calibRetry = false;
   log(t('log.calibPoint', { n, px: p.x.toFixed(1), py: p.y.toFixed(1), rx: real.x, ry: real.y }));
 
-  if (state.pendingCalib.img.length >= 2) {
-    const { transform, warnings } = computeTransform(
-      /** @type {[Pt, Pt]} */ ([state.pendingCalib.img[0], state.pendingCalib.img[1]]),
-      /** @type {[Pt, Pt]} */ ([state.pendingCalib.real[0], state.pendingCalib.real[1]]),
-    );
+  if (!missing.x && !missing.y) {
+    const { transform, warnings } = computeTransform(state.pendingCalib.img, state.pendingCalib.real);
     const replaced = state.transform !== null;
     // commit: from here on this is the calibration every real-world coordinate uses
     state.transform = transform;
@@ -1364,9 +1699,10 @@ async function handleCalibClick(p, event) {
     setMode('add');
     setStatus('status.add');
     redraw();
-    updateGuide();
+    flashCalibOk();
   } else {
-    setStatus('status.calib2');
+    setStatus(n === 1 ? 'status.calib2' : 'status.calib3');
+    updateGuide();
   }
 }
 
@@ -1997,6 +2333,57 @@ els.next.addEventListener('click', () => step(1));
 els.jump.addEventListener('click', jumpDialog);
 els.canvas.addEventListener('click', onCanvasClick);
 
+// rulers: drag to move, drop outside the stage to remove, right-click for a delete button
+els.rulerH.addEventListener('click', () => addRuler('h'));
+els.rulerV.addEventListener('click', () => addRuler('v'));
+els.rulerEdit.addEventListener('click', () => setRulerEdit(!state.rulerEdit));
+els.canvas.addEventListener('mousedown', (e) => {
+  swallowClick = false;
+  if (e.button !== 0 || !state.currentFrame) return;
+  const i = rulerAt(e);
+  if (i < 0) return;
+  e.preventDefault();
+  state.rulerDrag = { index: i };
+});
+window.addEventListener('mousemove', (e) => {
+  if (state.rulerDrag) {
+    const r = state.rulers[state.rulerDrag.index];
+    const p = eventToImageCoords(e);
+    r.pos = r.axis === 'h' ? p.y : p.x;
+    redraw();
+    return;
+  }
+  if (e.target !== els.canvas) return;
+  // show that a ruler can be grabbed; the stylesheet's crosshair otherwise
+  const i = state.currentFrame ? rulerAt(e) : -1;
+  els.canvas.style.cursor = i < 0 ? '' : state.rulers[i].axis === 'h' ? 'ns-resize' : 'ew-resize';
+});
+window.addEventListener('mouseup', (e) => {
+  if (!state.rulerDrag) return;
+  const rect = els.stage.getBoundingClientRect();
+  const outside = e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom;
+  const index = state.rulerDrag.index;
+  state.rulerDrag = null;
+  // a click event follows only when the button is released over the canvas
+  swallowClick = e.target === els.canvas;
+  if (outside) removeRuler(index);
+});
+els.canvas.addEventListener('contextmenu', (e) => {
+  const i = state.currentFrame ? rulerAt(e) : -1;
+  if (i < 0) return;   // not on a ruler: leave the browser's own menu alone
+  e.preventDefault();
+  showRulerMenu(e, i);
+});
+els.rulerMenu.addEventListener('click', () => {
+  const i = rulerMenuIndex;
+  hideRulerMenu();
+  removeRuler(i);
+});
+// any other press closes the delete button
+document.addEventListener('mousedown', (e) => {
+  if (e.target !== els.rulerMenu) hideRulerMenu();
+}, true);
+
 // settings sheet: ⚙ toggles it; ✕, a click on the backdrop and Esc close it
 els.settingsBtn.addEventListener('click', () => setSettingsOpen(els.settingsPanel.hidden));
 els.settingsClose.addEventListener('click', () => setSettingsOpen(false));
@@ -2075,7 +2462,7 @@ els.stage.addEventListener('wheel', (e) => {
 
 els.modeButtons.forEach((b) => b.addEventListener('click', () => {
   if (b.dataset.mode === 'calib') enterCalibMode();
-  else if (b.dataset.mode === 'add') enterAddMode();
+  else if (b.dataset.mode === 'add') requestAddMode();
   else enterDelMode();
 }));
 
@@ -2104,6 +2491,10 @@ document.addEventListener('drop', async (e) => {
 });
 
 document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && hideRulerMenu()) {
+    e.preventDefault();
+    return;
+  }
   // Esc first: it must also work while a control inside the settings sheet has focus
   if (e.key === 'Escape' && !document.querySelector('dialog[open]') && closeOverlays()) {
     e.preventDefault();
@@ -2138,9 +2529,12 @@ document.addEventListener('keydown', (e) => {
     case '-': zoomByButton(1 / 1.25); break;
     case '0': fitView(); redraw(); break;
     case 'c': if (state.source) enterCalibMode(); break;
-    case 'a': if (state.source) enterAddMode(); break;
+    case 'a': requestAddMode(); break;
     case 'd': if (state.source) enterDelMode(); break;
     case 'j': if (state.source) jumpDialog(); break;
+    case 'r': addRuler('h'); break;
+    case 'v': addRuler('v'); break;
+    case 'f': if (state.source) setRulerEdit(!state.rulerEdit); break;
     case 'e': openSettings(); break;
     case 'h': case '?': openHelp(); break;
     default: return;
